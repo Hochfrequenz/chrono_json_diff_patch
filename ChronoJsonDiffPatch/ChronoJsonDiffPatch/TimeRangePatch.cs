@@ -104,7 +104,7 @@ public class TimeRangePatch : TimeRange
     }
 
     // implement the time range interface
-    
+
     /// <inheritdoc cref="TimeRange.Start"/>
     [NotMapped]
     [System.Text.Json.Serialization.JsonIgnore]
