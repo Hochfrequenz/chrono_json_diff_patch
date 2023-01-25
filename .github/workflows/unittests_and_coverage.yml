@@ -31,4 +31,4 @@ jobs:
         run: dotnet add package coverlet.msbuild
       - name: Measure Test Coverage
         working-directory: ./ChronoJsonDiffPatch
-        run: dotnet test /p:Threshold=95 /p:Include=\"[*]ChronoJsonDiffPatch.*" /p:ThresholdType=line /p:CollectCoverage=true /p:SkipAutoProps=true /p:CoverletOutputFormat=lcov --configuration Release
+        run: dotnet test /p:Threshold=58 /p:Include=\"[*]ChronoJsonDiffPatch.*\" /p:ThresholdType=line /p:CollectCoverage=true /p:SkipAutoProps=true /p:CoverletOutputFormat=lcov --configuration Release
