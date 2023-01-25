@@ -93,6 +93,10 @@ public class TimeRangePatch : TimeRange
         Patch = patch;
     }
 
+    /// <summary>
+    /// a human readable representation of the time range
+    /// </summary>
+    /// <returns></returns>
     public override string ToString()
     {
         var toString = To.HasValue ? To.Value.ToString("o") : "?";
@@ -100,6 +104,8 @@ public class TimeRangePatch : TimeRange
     }
 
     // implement the time range interface
+    
+    /// <inheritdoc cref="TimeRange.Start"/>
     [NotMapped]
     [System.Text.Json.Serialization.JsonIgnore]
     [Newtonsoft.Json.JsonIgnore]
@@ -109,6 +115,8 @@ public class TimeRangePatch : TimeRange
         set => From = value == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(value);
     }
 
+
+    /// <inheritdoc cref="TimeRange.End"/>
     [NotMapped]
     [System.Text.Json.Serialization.JsonIgnore]
     [Newtonsoft.Json.JsonIgnore]
@@ -118,6 +126,7 @@ public class TimeRangePatch : TimeRange
         set => To = new DateTimeOffset(value);
     }
 
+    /// <inheritdoc cref="TimeRange.Duration"/>
     [NotMapped]
     [System.Text.Json.Serialization.JsonIgnore]
     [Newtonsoft.Json.JsonIgnore]
