@@ -1,0 +1,43 @@
+name: Nuget Prerelease
+
+on:
+  push:
+    tags:
+      - prerelease-v*
+
+jobs:
+  pushprerelease:
+    runs-on: windows-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: "true"
+    steps:
+      - name: Get current time
+        uses: srfrnk/current-time@master
+        id: current-time
+        with:
+          format: YYYYMMDDHHmmss
+      - uses: actions/checkout@master
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 7.0.100
+      - uses: olegtarasov/get-tag@v2.1
+        id: tagTimeslice
+        with:
+          tagRegex: "prerelease-v(\\d+\\.\\d+\\.\\d+)"
+      - name: Build/Check for compile errors (dotnet build)
+        working-directory: "ChronoJsonDiffPatch"
+        run: dotnet build --configuration Release
+      - name: Run Unit Tests (dotnet test)
+        working-directory: "ChronoJsonDiffPatch"
+        run: dotnet test --configuration Release
+      - name: Create Package ChronoJsonDiffPatch (dotnet pack)
+        working-directory: "ChronoJsonDiffPatch/ChronoJsonDiffPatch"
+        run: dotnet pack ChronoJsonDiffPatch.csproj --configuration Release -p:PackageVersion="${{ steps.tagTimeslice.outputs.tag }}-beta${{ steps.current-time.outputs.formattedTime }}"
+      - name: Setup Nuget.exe
+        uses: warrenbuckley/Setup-Nuget@v1
+      - name: Nuget push ChronoJsonDiffPatch
+        working-directory: "ChronoJsonDiffPatch/ChronoJsonDiffPatch"
+        run: |
+          nuget setApiKey ${{ secrets.NUGET_ORG_PUSH_TOKEN }}
+          nuget push .\bin\Release\*.nupkg -Source https://api.nuget.org/v3/index.json -SkipDuplicate -NoSymbols
