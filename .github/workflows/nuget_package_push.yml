@@ -1,0 +1,38 @@
+name: Nuget Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  pushrelease:
+    runs-on: windows-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: "true"
+    steps:
+      - uses: actions/checkout@master
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 7.0.100
+      - uses: olegtarasov/get-tag@v2.1
+        id: tagTimeslice
+        with:
+          tagRegex: "v(\\d+\\.\\d+\\.\\d+)"
+      - name: Build/Check for compile errors (dotnet build)
+        working-directory: "ChronoJsonDiffPatch"
+        run: dotnet build --configuration Release
+      - name: Run Unit Tests (dotnet test)
+        working-directory: "ChronoJsonDiffPatch"
+        run: dotnet test --configuration Release
+      - name: Create Package TimeSlice (dotnet pack)
+        working-directory: "ChronoJsonDiffPatch/ChronoJsonDiffPatch"
+        run: dotnet pack TimeSlice.csproj --configuration Release -p:PackageVersion="${{ steps.tagTimeslice.outputs.tag }}"
+      - name: Setup Nuget.exe
+        uses: warrenbuckley/Setup-Nuget@v1
+      - name: Nuget push TimeSlice
+        working-directory: "ChronoJsonDiffPatch/ChronoJsonDiffPatch"
+        run: |
+          nuget setApiKey ${{ secrets.TIMESLICE_NUGET_ORG_PUSH_TOKEN }}
+          nuget push .\bin\Release\*.nupkg -Source https://api.nuget.org/v3/index.json -SkipDuplicate -NoSymbols
