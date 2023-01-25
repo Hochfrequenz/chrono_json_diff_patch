@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ChronoJsonDiffPatch;
 using FluentAssertions;
 
@@ -39,5 +40,14 @@ public class TimeRangePatchSerializationTests
     {
         var emptyPatch = new TimeRangePatch();
         SerializationRoundtrip(emptyPatch, serializer, deserializer);
+    }
+
+    [Fact]
+    public void Test_ToString()
+    {
+        var patch = JsonDocument.Parse("""{"foo": "bar"}""");
+        var emptyPatch = new TimeRangePatch(patch: patch, from: new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), to: new DateTimeOffset(2023, 3, 2, 1, 0, 0, 0, TimeSpan.Zero));
+        var actual = emptyPatch.ToString();
+        actual.Should().Be("[2022-01-01T00:00:00.0000000+00:00, 2023-03-02T01:00:00.0000000+00:00): {\"foo\": \"bar\"}");
     }
 }

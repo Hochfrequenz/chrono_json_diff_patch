@@ -46,7 +46,6 @@ public class TimeRangePatch : TimeRange
                     throw new ArgumentException($"{nameof(value)} ({value.Value:o}) must not be lower than {nameof(From)} ({From:o})");
                 }
             }
-
             _to = value;
         }
     }
@@ -54,7 +53,8 @@ public class TimeRangePatch : TimeRange
     /// <summary>
     /// exclusive end/to datetime
     /// </summary>
-    [NotMapped] private DateTimeOffset? _to;
+    [NotMapped]
+    private DateTimeOffset? _to;
 
     /// <summary>
     /// The latest timestamp
@@ -66,7 +66,7 @@ public class TimeRangePatch : TimeRange
     [JsonProperty(PropertyName = "timestamp", Order = 13)]
     public DateTimeOffset? Timestamp { get; set; }
 
-    public readonly static DateTimeOffset OpenEnd = DateTimeOffset.MaxValue;
+    private static readonly DateTimeOffset OpenEnd = DateTimeOffset.MaxValue;
 
     /// <summary>
     /// empty constructor (required for JSON deserialization)
@@ -96,7 +96,7 @@ public class TimeRangePatch : TimeRange
     public override string ToString()
     {
         var toString = To.HasValue ? To.Value.ToString("o") : "?";
-        return $"[{From:o}, {toString}): {Patch}";
+        return $"[{From:o}, {toString}): {Patch?.RootElement.ToString()}";
     }
 
     // implement the time range interface
