@@ -12,6 +12,9 @@ namespace ChronoJsonDiffPatch;
 /// </summary>
 public class TimeRangePatch : TimeRange
 {
+    /// <summary>
+    /// The <see cref="JsonDiffPatchDotNet.JsonDiffPatch"/> serialized as a <see cref="JsonDocument"/>
+    /// </summary>
     [Column(TypeName = "jsonb")]
     [JsonPropertyName("patch")]
     [JsonPropertyOrder(10)]
