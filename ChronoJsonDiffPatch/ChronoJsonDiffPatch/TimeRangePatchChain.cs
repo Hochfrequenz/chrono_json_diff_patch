@@ -80,12 +80,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             throw new ArgumentException("You must not add something that already exists");
         }
         var jdp = new JsonDiffPatchDotNet.JsonDiffPatch();
-        var initialToken = JToken.Parse(_serializer(initialEntity));
+        
+        JToken patch;
         var changedToken = JToken.Parse(_serializer(changedEntity));
 
-        JToken patch;
         if (Count == 0) // seems like this entity has no tracked changes so far
         {
+            var initialToken = JToken.Parse(_serializer(initialEntity));
+            changedToken = JToken.Parse(_serializer(changedEntity));
             // We initially add 2 patches:
             // 1) an empty patch from the beginning of time (-infinity) up to the moment at which the changes is applied
             //    this means: the entity is unchanged from -infinity up to the given moment.
@@ -96,10 +98,11 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             base.Add(new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null));
             return;
         }
-        patch = jdp.Diff(changedToken, initialToken);
+        var upToDateToken = JToken.Parse(_serializer(PatchToDate(initialEntity, moment)));
+        patch = jdp.Diff(upToDateToken, changedToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
-        var fromMomentTillInfinity = new TimeRangePatch(from: moment, null);
+        var fromMomentTillInfinity = new TimeRangePatch(from: moment, patch:System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to:null);
         var overlappingPatches = this.GetAll().Where(ep => ep.OverlapsWith(fromMomentTillInfinity));
         foreach (var existingPatch in overlappingPatches)
         {
@@ -108,6 +111,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             if (intersection.Start > existingPatch.Start)
             {
                 existingPatch.ShrinkEndTo(intersection.Start);
+                
             }
             else if (intersection.End > existingPatch.Start)
             {
@@ -118,6 +122,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 throw new NotImplementedException();
             }
         }
+        Add(fromMomentTillInfinity);
     }
 
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
@@ -128,7 +133,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         foreach (var existingPatch in this.GetAll()
                      .Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null)
                      .Where(p => p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null)
-                     .OrderByDescending(p => p.Start))
+                     .OrderBy(p => p.Start))
 
         {
             var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch.RootElement.GetRawText());

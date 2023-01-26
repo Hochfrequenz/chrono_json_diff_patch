@@ -54,15 +54,81 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo"
+            MyProperty = "foo" // start with foo
         };
         var myChangedEntity = new DummyClass
         {
-            MyProperty = "bar"
+            MyProperty = "bar" // then switch to bar at key date
         };
         var keyDate = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         trpCollection.Add(myEntity, myChangedEntity, keyDate);
         var actual = trpCollection.PatchToDate(myEntity, keyDate + TimeSpan.FromDays(daysToKeyDate));
         actual.MyProperty.Should().Be(expectedProperty);
+    }
+
+    /// <summary>
+    /// Apply to patches, in ascending order
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_Sequentially()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar" // switch to bar at keydate A
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA);
+        }
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to baz at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
+        }
+        var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
+        actualA.MyProperty.Should().Be("bar");
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("baz");
+    }
+    
+    /// <summary>
+    /// Apply two patches but the second one is before the last one
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_Unordered()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to bar at keydate B
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateB);
+        }
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateA);
+        }
+        var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
+        actualA.MyProperty.Should().Be("bar");
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("baz");
     }
 }
