@@ -37,6 +37,12 @@ public class TimeRangePatchChain : TimePeriodChain
         return this.Cast<TimeRangePatch>();
     }
 
+    /// <summary>
+    /// Returns true iff the chain contains an item that has a <see cref="TimeRange.Start"/> date whose start doesn't differ more than <paramref name="graceTicks"/> from <paramref name="start"/>.
+    /// </summary>
+    /// <param name="start"></param>
+    /// <param name="graceTicks"></param>
+    /// <returns></returns>
     public bool Contains(DateTimeOffset start, uint graceTicks = 1000)
     {
         if (graceTicks == 0)
