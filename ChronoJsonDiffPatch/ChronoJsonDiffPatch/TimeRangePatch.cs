@@ -62,12 +62,6 @@ public class TimeRangePatch : TimeRange
     }
 
     /// <summary>
-    /// exclusive end/to datetime
-    /// </summary>
-    [NotMapped]
-    private DateTimeOffset? _to;
-
-    /// <summary>
     /// The latest timestamp
     /// </summary>
     /// <remarks>Thought to be used when storing TimeRangePatches in a database</remarks>
