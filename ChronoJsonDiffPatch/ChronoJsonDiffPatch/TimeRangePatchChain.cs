@@ -92,8 +92,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             // 2) a patch that describes the changes that happen at the moment
             // their order is such that the index[0] of the list contains the most recent change and index[-1] starts at -infinity
             patch = jdp.Diff(initialToken, changedToken);
-            base.Add(new TimeRangePatch(from: DateTimeOffset.MinValue.UtcDateTime, patch:null ,to: moment.UtcDateTime));
-            base.Add(new TimeRangePatch(from: moment, patch:System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to:null));
+            base.Add(new TimeRangePatch(from: DateTimeOffset.MinValue.UtcDateTime, patch: null, to: moment.UtcDateTime));
+            base.Add(new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null));
             return;
         }
         patch = jdp.Diff(changedToken, initialToken);
@@ -127,9 +127,9 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
         foreach (var existingPatch in this.GetAll()
                      .Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null)
-                     .Where(p=>p.Patch!.RootElement.ValueKind!=System.Text.Json.JsonValueKind.Null)
+                     .Where(p => p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null)
                      .OrderByDescending(p => p.Start))
-                     
+
         {
             var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch.RootElement.GetRawText());
             left = jdp.Patch(left, jtokenPatch);
