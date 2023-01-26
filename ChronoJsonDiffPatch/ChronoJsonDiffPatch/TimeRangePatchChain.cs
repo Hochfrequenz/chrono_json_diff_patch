@@ -1,10 +1,30 @@
 ﻿using Itenso.TimePeriod;
+using JsonDiffPatchDotNet;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace ChronoJsonDiffPatch;
 
-
+/// <summary>
+/// Assume
+/// * There are two key dates: dtA and dtB
+/// * dtB &gt; dtA
+/// * There is a patchA at dtA that puts our entity in state A.
+/// * There is a patchB at dtB that puts our entity in state B. 
+/// If the patching order is now: (patchB, patchA), what is the desired state at dtB?
+/// This enums allows you to distinguish the behaviour of <see cref="TimeRangePatchChain{TEntity}.Add(TEntity,TEntity,System.DateTimeOffset)"/>
+/// </summary>
+public enum FuturePatchBehaviour
+{
+    /// <summary>
+    /// The future (&gt;= dtB) shall have state A: (the previous future state B is overwritten)
+    /// </summary>
+    OverwriteTheFuture,
+    /// <summary>
+    /// The future (&gt;= dtB) shall have state B: the second patchA only lasts in the interval between [A,B)
+    /// </summary>
+    KeepTheFuture,
+}
 
 /// <summary>
 /// A collection of <see cref="TimeRangePatch"/>es that implements <see cref="ITimePeriodChain"/>
@@ -73,17 +93,15 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         return GetAll().Any(ze => Math.Abs((ze.Start.ToUniversalTime() - start.UtcDateTime).Ticks) <= graceTicks);
     }
 
-    public void Add(TEntity initialEntity, TEntity changedEntity, DateTimeOffset moment)
+    public void Add(TEntity initialEntity, TEntity changedEntity, DateTimeOffset moment, FuturePatchBehaviour? futurePatchBehaviour = null)
     {
         if (Contains(moment))
         {
             throw new ArgumentException("You must not add something that already exists");
         }
-        var jdp = new JsonDiffPatchDotNet.JsonDiffPatch();
-        
+        var jdp = new JsonDiffPatch();
         JToken patch;
         var changedToken = JToken.Parse(_serializer(changedEntity));
-
         if (Count == 0) // seems like this entity has no tracked changes so far
         {
             var initialToken = JToken.Parse(_serializer(initialEntity));
@@ -103,26 +121,50 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
         var fromMomentTillInfinity = new TimeRangePatch(from: moment, patch:System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to:null);
-        var overlappingPatches = this.GetAll().Where(ep => ep.OverlapsWith(fromMomentTillInfinity));
-        foreach (var existingPatch in overlappingPatches)
+        Action<TimeRangePatch> insertAction = (trp)=>base.Add(trp); // we defer the insert until we're done with looping over the collection
+        var index = -1;
+        foreach (var existingPatch in GetAll())
         {
+            index += 1; // starts at 0 but is always incremented at begin of loop
+            if (!existingPatch.OverlapsWith(fromMomentTillInfinity))
+            {
+                continue;
+            }
             var intersection = existingPatch.GetIntersection(fromMomentTillInfinity);
             // we remove the intersection from the existing patch
             if (intersection.Start > existingPatch.Start)
             {
                 existingPatch.ShrinkEndTo(intersection.Start);
-                
+                insertAction = (trp) => base.Add(trp); // append at end of list
             }
             else if (intersection.End > existingPatch.Start)
             {
-                existingPatch.ShrinkStartTo(intersection.End);
+                if (!futurePatchBehaviour.HasValue)
+                {
+                    throw new ArgumentNullException(nameof(futurePatchBehaviour));
+                }
+
+                if (futurePatchBehaviour == FuturePatchBehaviour.KeepTheFuture)
+                {
+                    fromMomentTillInfinity.ShrinkEndTo(intersection.Start);
+                    insertAction = (trp) => base.Insert(index, trp);
+                    // not only do we have to add the patch at this index later but also we need to modify the existing patch because its predecessor changed
+                    var futureToken = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));
+                    var updatedPatch = new JsonDiffPatch().Diff(changedToken, futureToken);
+                    existingPatch.Patch = System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(updatedPatch));
+                }
+                else
+                {
+                    throw new NotImplementedException();
+                }
             }
             else
             {
                 throw new NotImplementedException();
             }
         }
-        Add(fromMomentTillInfinity);
+
+        insertAction(fromMomentTillInfinity);
     }
 
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)

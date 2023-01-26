@@ -124,7 +124,7 @@ public class TimeRangePatchChainTests
             {
                 MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
             };
-            trpCollection.Add(myEntity, myAnotherEntity, keyDateA);
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
         }
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
         actualA.MyProperty.Should().Be("bar");
