@@ -3,7 +3,7 @@ using FluentAssertions;
 
 namespace ChronoJsonDiffPatchTests;
 
-public class TimeRangePatchCollectionTests
+public class TimeRangePatchChainTests
 {
     [Fact]
     public void Test_Contains()
@@ -31,5 +31,6 @@ public class TimeRangePatchCollectionTests
                 trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(i), graceTicks: 0).Should().BeFalse();
             }
         }
+        trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(1001)).Should().BeFalse();
     }
 }

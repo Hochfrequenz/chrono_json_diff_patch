@@ -6,6 +6,7 @@ namespace ChronoJsonDiffPatch;
 /// <summary>
 /// A collection of <see cref="TimeRangePatch"/>es that implements <see cref="ITimePeriodChain"/>
 /// </summary>
+/// <remarks>We inherit from <see cref="TimePeriodChain"/> because this guarantees that there are no gaps between two <see cref="TimeRangePatch"/>es</remarks>
 public class TimeRangePatchChain : TimePeriodChain
 {
     private static readonly JsonSerializerSettings DefaultJsonSerializerSettings = new()
