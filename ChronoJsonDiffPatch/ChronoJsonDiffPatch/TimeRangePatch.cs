@@ -28,7 +28,11 @@ public class TimeRangePatch : TimeRange
     [JsonProperty(PropertyName = "from", Order = 11, Required = Required.Default)]
     [JsonPropertyName("from")]
     [JsonPropertyOrder(11)]
-    public DateTimeOffset From { get; set; }
+    public DateTimeOffset From
+    {
+        get => Start == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(Start);
+        set => Start = value == DateTimeOffset.MinValue ? DateTime.MinValue : value.UtcDateTime;
+    }
 
     /// <summary>
     /// exclusive end/to datetime
@@ -39,7 +43,7 @@ public class TimeRangePatch : TimeRange
     [JsonPropertyOrder(12)]
     public DateTimeOffset? To
     {
-        get => _to;
+        get => End == DateTime.MaxValue ? DateTimeOffset.MaxValue : new DateTimeOffset(End);
         set
         {
             if (value.HasValue)
@@ -48,8 +52,12 @@ public class TimeRangePatch : TimeRange
                 {
                     throw new ArgumentException($"{nameof(value)} ({value.Value:o}) must not be lower than {nameof(From)} ({From:o})");
                 }
+                End = value.Value.UtcDateTime;
             }
-            _to = value;
+            else
+            {
+                End = DateTime.MaxValue;
+            }
         }
     }
 
@@ -68,8 +76,6 @@ public class TimeRangePatch : TimeRange
     [JsonPropertyOrder(13)]
     [JsonProperty(PropertyName = "timestamp", Order = 13)]
     public DateTimeOffset? Timestamp { get; set; }
-
-    private static readonly DateTimeOffset OpenEnd = DateTimeOffset.MaxValue;
 
     /// <summary>
     /// empty constructor (required for JSON deserialization)
@@ -104,38 +110,5 @@ public class TimeRangePatch : TimeRange
     {
         var toString = To.HasValue ? To.Value.ToString("o") : "?";
         return $"[{From:o}, {toString}): {Patch?.RootElement.ToString()}";
-    }
-
-    // implement the time range interface
-
-    /// <inheritdoc cref="TimeRange.Start"/>
-    [NotMapped]
-    [System.Text.Json.Serialization.JsonIgnore]
-    [Newtonsoft.Json.JsonIgnore]
-    public new DateTime Start
-    {
-        get => From.UtcDateTime;
-        set => From = value == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(value);
-    }
-
-
-    /// <inheritdoc cref="TimeRange.End"/>
-    [NotMapped]
-    [System.Text.Json.Serialization.JsonIgnore]
-    [Newtonsoft.Json.JsonIgnore]
-    public new DateTime End
-    {
-        get => To?.UtcDateTime ?? OpenEnd.DateTime;
-        set => To = new DateTimeOffset(value);
-    }
-
-    /// <inheritdoc cref="TimeRange.Duration"/>
-    [NotMapped]
-    [System.Text.Json.Serialization.JsonIgnore]
-    [Newtonsoft.Json.JsonIgnore]
-    public new TimeSpan Duration
-    {
-        get => new TimeRange(Start, End).Duration;
-        set { }
     }
 }
