@@ -4,7 +4,7 @@ using FluentAssertions;
 
 namespace ChronoJsonDiffPatchTests;
 
-public class TimeRangePatchSerializationTests
+public class TimeRangePatchTests
 {
     public enum Serializer
     {
