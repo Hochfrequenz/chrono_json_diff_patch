@@ -5,7 +5,6 @@ namespace ChronoJsonDiffPatchTests;
 
 public class TimeRangePatchCollectionTests
 {
-
     [Fact]
     public void Test_Contains()
     {
