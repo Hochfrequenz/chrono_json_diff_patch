@@ -82,7 +82,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         var jdp = new JsonDiffPatchDotNet.JsonDiffPatch();
         var initialToken = JToken.Parse(_serializer(initialEntity));
         var changedToken = JToken.Parse(_serializer(changedEntity));
-        JToken patch = jdp.Diff(changedToken, initialToken);
+
+        JToken patch;
         if (Count == 0) // seems like this entity has no tracked changes so far
         {
             // We initially add 2 patches:
@@ -90,13 +91,12 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             //    this means: the entity is unchanged from -infinity up to the given moment.
             // 2) a patch that describes the changes that happen at the moment
             // their order is such that the index[0] of the list contains the most recent change and index[-1] starts at -infinity
-
-            base.Add(new TimeRangePatch(from: DateTimeOffset.MinValue.UtcDateTime, System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)),
-                to: moment.UtcDateTime));
-            base.Add(new TimeRangePatch(from: moment, null));
+            patch = jdp.Diff(initialToken, changedToken);
+            base.Add(new TimeRangePatch(from: DateTimeOffset.MinValue.UtcDateTime, patch:null ,to: moment.UtcDateTime));
+            base.Add(new TimeRangePatch(from: moment, patch:System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to:null));
             return;
         }
-
+        patch = jdp.Diff(changedToken, initialToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
         var fromMomentTillInfinity = new TimeRangePatch(from: moment, null);
@@ -125,13 +125,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         var jdp = new JsonDiffPatchDotNet.JsonDiffPatch();
         var left = JToken.Parse(_serializer(initialEntity));
 
-        foreach (var existingPatch in this.GetAll().OrderByDescending(p => p.Start).Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null))
+        foreach (var existingPatch in this.GetAll()
+                     .Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null)
+                     .Where(p=>p.Patch!.RootElement.ValueKind!=System.Text.Json.JsonValueKind.Null)
+                     .OrderByDescending(p => p.Start))
+                     
         {
-            if (existingPatch.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null)
-            {
-                var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch.RootElement.GetRawText());
-                left = jdp.Patch(left, jtokenPatch);
-            }
+            var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch.RootElement.GetRawText());
+            left = jdp.Patch(left, jtokenPatch);
         }
         return _deserializer(JsonConvert.SerializeObject(left));
     }
