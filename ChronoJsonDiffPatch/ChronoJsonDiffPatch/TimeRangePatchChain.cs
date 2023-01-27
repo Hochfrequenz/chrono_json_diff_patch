@@ -93,6 +93,22 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         return GetAll().Any(ze => Math.Abs((ze.Start.ToUniversalTime() - start.UtcDateTime).Ticks) <= graceTicks);
     }
 
+    /// <summary>
+    /// Adds a <see cref="TimeRangePatch"/> to the <see cref="TimePeriodChain"/>.
+    /// The patch is constructed using the initial state of the entity <paramref name="initialEntity"/> and the state <paramref name="changedEntity"/> which should come into effect at the specified <paramref name="moment"/>.
+    /// This method loops over all existing patches and adds another differential patch that describes the difference between the state of the entity closest to <paramref name="moment"/> and <paramref name="moment"/>.
+    /// </summary>
+    /// <param name="initialEntity">Initial state of the Entity at the beginning of time.</param>
+    /// <param name="changedEntity">The state that the entity should have at <paramref name="moment"/></param>
+    /// <param name="moment">a point in time at which the entity shall have the state <paramref name="changedEntity"/></param>
+    /// <param name="futurePatchBehaviour">
+    /// When there already exists any patch whose <see cref="TimeRange.Start"/> is &gt;= <paramref name="moment"/> then you have to specify how the requested "change in the past" shall behave.
+    /// For details see the docstrings of <see cref="FuturePatchBehaviour"/>.
+    /// In the straight forward case that <paramref name="moment"/> is later than all existing patches start dates, you can leave the field empty/default to null.
+    /// </param>
+    /// <exception cref="ArgumentException">This shall be removed in the future</exception>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="NotImplementedException"></exception>
     public void Add(TEntity initialEntity, TEntity changedEntity, DateTimeOffset moment, FuturePatchBehaviour? futurePatchBehaviour = null)
     {
         if (Contains(moment))
@@ -172,7 +188,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
-        var jdp = new JsonDiffPatchDotNet.JsonDiffPatch();
+        var jdp = new JsonDiffPatch();
         var left = JToken.Parse(_serializer(initialEntity));
 
         foreach (var existingPatch in this.GetAll()

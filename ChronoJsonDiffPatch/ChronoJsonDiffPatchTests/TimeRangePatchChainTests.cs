@@ -100,7 +100,7 @@ public class TimeRangePatchChainTests
     }
 
     /// <summary>
-    /// Apply two patches but the second one is before the last one
+    /// Apply two patches but the second one (B) is before the last one (A)
     /// </summary>
     [Fact]
     public void Test_Three_Patches_Unordered()
