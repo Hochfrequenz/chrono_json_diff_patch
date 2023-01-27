@@ -181,7 +181,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                      .OrderBy(p => p.Start))
 
         {
-            var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch.RootElement.GetRawText());
+            var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
             left = jdp.Patch(left, jtokenPatch);
         }
         return _deserializer(JsonConvert.SerializeObject(left));
