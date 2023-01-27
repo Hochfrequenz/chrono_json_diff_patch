@@ -120,22 +120,22 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         patch = jdp.Diff(upToDateToken, changedToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
-        var fromMomentTillInfinity = new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null);
-        Action<TimeRangePatch> insertAction = (trp) => base.Add(trp); // we defer the insert until we're done with looping over the collection
+        var patchToBeAdded = new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null);
+        Action<TimeRangePatch> insertAction = trp => base.Add(trp); // we defer the insert until we're done with looping over the collection
         var index = -1;
         foreach (var existingPatch in GetAll())
         {
             index += 1; // starts at 0 but is always incremented at begin of loop
-            if (!existingPatch.OverlapsWith(fromMomentTillInfinity))
+            if (!existingPatch.OverlapsWith(patchToBeAdded))
             {
                 continue;
             }
-            var intersection = existingPatch.GetIntersection(fromMomentTillInfinity);
+            var intersection = existingPatch.GetIntersection(patchToBeAdded);
             // we remove the intersection from the existing patch
             if (intersection.Start > existingPatch.Start)
             {
                 existingPatch.ShrinkEndTo(intersection.Start);
-                insertAction = (trp) => base.Add(trp); // append at end of list
+                insertAction = trp => base.Add(trp); // append at end of list
             }
             else if (intersection.End > existingPatch.Start)
             {
@@ -146,11 +146,11 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
                 if (futurePatchBehaviour == FuturePatchBehaviour.KeepTheFuture)
                 {
-                    fromMomentTillInfinity.ShrinkEndTo(intersection.Start);
+                    patchToBeAdded.ShrinkEndTo(intersection.Start);
                     var previousPatch = (TimeRangePatch)this[index - 1];
-                    previousPatch.ShrinkEndTo(fromMomentTillInfinity.Start);
-                    existingPatch.Move(-fromMomentTillInfinity.Duration); // this is a preparation for the following insert action
-                    insertAction = (trp) => base.Insert(index, trp);
+                    previousPatch.ShrinkEndTo(patchToBeAdded.Start);
+                    existingPatch.Move(-patchToBeAdded.Duration); // this is a preparation for the following insert action
+                    insertAction = trp => base.Insert(index, trp);
                     // not only do we have to add the patch at this index later but also we need to modify the existing patch because its predecessor changed
                     var futureToken = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));
                     var updatedPatch = new JsonDiffPatch().Diff(changedToken, futureToken);
@@ -167,7 +167,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             }
         }
 
-        insertAction(fromMomentTillInfinity);
+        insertAction(patchToBeAdded);
     }
 
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
