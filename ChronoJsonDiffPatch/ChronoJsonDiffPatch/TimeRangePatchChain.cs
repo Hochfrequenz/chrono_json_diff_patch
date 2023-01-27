@@ -120,8 +120,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         patch = jdp.Diff(upToDateToken, changedToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
-        var fromMomentTillInfinity = new TimeRangePatch(from: moment, patch:System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to:null);
-        Action<TimeRangePatch> insertAction = (trp)=>base.Add(trp); // we defer the insert until we're done with looping over the collection
+        var fromMomentTillInfinity = new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null);
+        Action<TimeRangePatch> insertAction = (trp) => base.Add(trp); // we defer the insert until we're done with looping over the collection
         var index = -1;
         foreach (var existingPatch in GetAll())
         {
@@ -147,6 +147,9 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 if (futurePatchBehaviour == FuturePatchBehaviour.KeepTheFuture)
                 {
                     fromMomentTillInfinity.ShrinkEndTo(intersection.Start);
+                    var previousPatch = (TimeRangePatch)this[index - 1];
+                    previousPatch.ShrinkEndTo(fromMomentTillInfinity.Start);
+                    existingPatch.Move(-fromMomentTillInfinity.Duration); // this is a preparation for the following insert action
                     insertAction = (trp) => base.Insert(index, trp);
                     // not only do we have to add the patch at this index later but also we need to modify the existing patch because its predecessor changed
                     var futureToken = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));

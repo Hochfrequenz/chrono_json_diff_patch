@@ -98,7 +98,7 @@ public class TimeRangePatchChainTests
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
     }
-    
+
     /// <summary>
     /// Apply two patches but the second one is before the last one
     /// </summary>
