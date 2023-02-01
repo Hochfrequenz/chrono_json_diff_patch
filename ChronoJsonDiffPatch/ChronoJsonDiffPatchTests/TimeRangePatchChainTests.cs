@@ -189,4 +189,43 @@ public class TimeRangePatchChainTests
         trpCollection.HasStart.Should().BeFalse();
         trpCollection.HasEnd.Should().BeFalse();
     }
+
+    /// <summary>
+    /// Apply three patches but discard the future
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_And_Overwrite_The_Future()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "A" // start with foo
+        };
+        var keyDateC = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "C" // switch to "C" at keydate C
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateC, FuturePatchBehaviour.OverwriteTheFuture);
+        }
+        var actualC = trpCollection.PatchToDate(myEntity, keyDateC);
+        actualC.MyProperty.Should().Be("C");
+        var keyDateB = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "B" // switch to B at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB, futurePatchBehaviour: FuturePatchBehaviour.OverwriteTheFuture);
+        }
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("B");
+
+        actualC = trpCollection.PatchToDate(myEntity, keyDateC); // again
+        actualC.MyProperty.Should().Be("B"); // not C because overwrite the future
+
+        trpCollection.HasStart.Should().BeFalse();
+        trpCollection.HasEnd.Should().BeFalse();
+    }
 }

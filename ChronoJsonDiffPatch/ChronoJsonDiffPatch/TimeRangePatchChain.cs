@@ -113,7 +113,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     {
         if (Contains(moment))
         {
-            throw new ArgumentException("You must not add something that already exists");
+            throw new ArgumentException("You must not add a patch at a date for which there is already a patch");
+            // the behaviour is undefined as of now
         }
         var jdp = new JsonDiffPatch();
         JToken patchAtKeyDate;
@@ -140,8 +141,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         var indexAtWhichThePatchShallBeAdded = IndexOf(GetAll().Last(trp => trp.Start <= moment.UtcDateTime)) + 1;
         if (GetAll().Any(trp => trp.Start > patchToBeAdded.Start))
         {
-            var lastExistingNonOverlappingPatch = GetAll().Last(trp => trp.Start < patchToBeAdded.Start && trp.OverlapsWith(patchToBeAdded));
-            lastExistingNonOverlappingPatch.ShrinkEndTo(patchToBeAdded.Start);
+            var lastExistingOverlappingPatch = GetAll().Last(trp => trp.Start < patchToBeAdded.Start && trp.OverlapsWith(patchToBeAdded));
+            lastExistingOverlappingPatch.ShrinkEndTo(patchToBeAdded.Start);
             switch (futurePatchBehaviour)
             {
                 case null:
@@ -162,7 +163,15 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         break;
                     }
                 case FuturePatchBehaviour.OverwriteTheFuture:
-                    throw new NotImplementedException();
+                    {
+                        var futureOverlappingPatchIndexes = GetAll().Where(trp => trp.Start >= patchToBeAdded.Start).Select(IndexOf);
+                        foreach (var futureIndex in futureOverlappingPatchIndexes.Reverse())
+                        {
+                            RemoveAt(futureIndex);
+                        }
+
+                        break;
+                    }
             }
         }
         var endHasBeenShrinked = false;
