@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using ChronoJsonDiffPatch;
 using FluentAssertions;
+using Itenso.TimePeriod;
 
 namespace ChronoJsonDiffPatchTests;
 
@@ -130,5 +131,86 @@ public class TimeRangePatchChainTests
         actualA.MyProperty.Should().Be("bar");
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
+    }
+
+    /// <summary>
+    /// Apply three patches but the order is ADCB
+    /// </summary>
+    [Fact]
+    public void Test_Four_Patches_Unordered()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "A" // start with foo
+        };
+        var keyDateD = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "D" // switch to "D" at keydate D
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateD);
+        }
+        var keyDateC = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "C" // switch to C at keydate C
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateC, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+        }
+        var keyDateB = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "B" // switch to B at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+        }
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("B");
+
+        var actualC = trpCollection.PatchToDate(myEntity, keyDateC);
+        actualC.MyProperty.Should().Be("C");
+
+        var actualD = trpCollection.PatchToDate(myEntity, keyDateD);
+        actualD.MyProperty.Should().Be("D");
+    }
+
+    [Fact]
+    public void Test_Insert_Into_A_TimePeriodChain_Without_An_End()
+    {
+        var itemAStart = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        itemAStart = DateTime.MinValue;
+        var chain = new TimePeriodChain();
+        var itemA = new TimeRange
+        {
+            Start = itemAStart,
+            End = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+        };
+        var itemC = new TimeRange
+        {
+            Start = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            End = DateTime.MaxValue
+        };
+        chain.Add(itemA);
+        chain.Add(itemC);
+        // now the chain looks like this:
+        // Min     2023         2024         2025             Max
+        //  |...----|------------|------------|-------------...|--> time
+        //          [--itemA-----------------)[---itemC-----...)
+
+
+        var itemB = new TimeRange
+        {
+            Start = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            End = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        // now i want to insert itemB into the chain, such that
+        // Min     2023         2024         2025             Max
+        //  |...----|------------|------------|-------------...|--> time
+        //          [--itemA----)[---itemB---)[----itemC----...)
+        chain.Add(itemB); // works
     }
 }

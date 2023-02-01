@@ -116,7 +116,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             throw new ArgumentException("You must not add something that already exists");
         }
         var jdp = new JsonDiffPatch();
-        JToken patch;
+        JToken patchAtKeyDate;
         var changedToken = JToken.Parse(_serializer(changedEntity));
         if (Count == 0) // seems like this entity has no tracked changes so far
         {
@@ -127,18 +127,55 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             //    this means: the entity is unchanged from -infinity up to the given moment.
             // 2) a patch that describes the changes that happen at the moment
             // their order is such that the index[0] of the list contains the most recent change and index[-1] starts at -infinity
-            patch = jdp.Diff(initialToken, changedToken);
+            patchAtKeyDate = jdp.Diff(initialToken, changedToken);
             base.Add(new TimeRangePatch(from: DateTimeOffset.MinValue.UtcDateTime, patch: null, to: moment.UtcDateTime));
-            base.Add(new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null));
+            base.Add(new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patchAtKeyDate)), to: null));
             return;
         }
         var upToDateToken = JToken.Parse(_serializer(PatchToDate(initialEntity, moment)));
-        patch = jdp.Diff(upToDateToken, changedToken);
+        patchAtKeyDate = jdp.Diff(upToDateToken, changedToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
-        var patchToBeAdded = new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patch)), to: null);
+        var patchToBeAdded = new TimeRangePatch(from: moment, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patchAtKeyDate)), to: null);
         var indexAtWhichThePatchShallBeAdded = IndexOf(GetAll().Last(trp => trp.Start <= moment.UtcDateTime)) + 1;
-        Action<TimeRangePatch> insertAction = trp => base.Add(trp); // we defer the insert until we're done with looping over the collection
+        if (GetAll().Any(trp => trp.Start > patchToBeAdded.Start))
+        {
+            var lastExistingNonOverlappingPatch = GetAll().Last(trp => trp.Start < patchToBeAdded.Start && trp.OverlapsWith(patchToBeAdded));
+            lastExistingNonOverlappingPatch.ShrinkEndTo(patchToBeAdded.Start);
+            switch (futurePatchBehaviour)
+            {
+                case null:
+                    throw new ArgumentNullException(nameof(futurePatchBehaviour));
+                case FuturePatchBehaviour.KeepTheFuture:
+                    {
+                        var firstExistingOverlappingPatch = GetAll().First(trp => trp.Start > patchToBeAdded.Start);
+                        var intersection = firstExistingOverlappingPatch.GetIntersection(patchToBeAdded);
+                        patchToBeAdded.ShrinkEndTo(intersection.Start);
+                        // not only do we have to modify the new patches end date but we also need to modify the existing patch itself because its predecessor changed
+                        var tokenAtIntersectionStart = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));
+                        var updatedPatch = new JsonDiffPatch().Diff(changedToken, tokenAtIntersectionStart);
+                        firstExistingOverlappingPatch.Patch = System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(updatedPatch));
+                        firstExistingOverlappingPatch.Move(-patchToBeAdded.Duration);
+                        break;
+                    }
+                case FuturePatchBehaviour.OverwriteTheFuture:
+                    throw new NotImplementedException();
+            }
+        }
+        if (!HasEnd)
+        {
+            // if the existing TimePeriodChain reaches from [MinValue to MaxValue),
+            // the insert will fail with an InvalidOperationException, because there
+            // is no "space left" for another TimeRange of the given duration.
+            // We artificially create that space at the end of the TimePeriodChain by
+            // shrinking the slice that touches +infinity.
+            ((TimeRangePatch)Last).ShrinkEndTo(Last.End - patchToBeAdded.Duration);
+            // upon insert the last slide will be slightly shifted towards later time
+            // such that the TimePeriodChain.End stays the same
+        }
+        base.Insert(indexAtWhichThePatchShallBeAdded, patchToBeAdded);
+
+        /*Action<TimeRangePatch> insertAction = trp => base.Add(trp); // we defer the insert until we're done with looping over the collection
         foreach (var existingPatch in GetAll().Where(p => p.OverlapsWith(patchToBeAdded)))
         {
             var intersection = existingPatch.GetIntersection(patchToBeAdded);
@@ -150,35 +187,43 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             }
             else if (intersection.End > existingPatch.Start)
             {
-                if (!futurePatchBehaviour.HasValue)
+                switch (futurePatchBehaviour)
                 {
-                    throw new ArgumentNullException(nameof(futurePatchBehaviour));
-                }
-
-                if (futurePatchBehaviour == FuturePatchBehaviour.KeepTheFuture)
-                {
-                    patchToBeAdded.ShrinkEndTo(intersection.Start);
-                    var previousPatch = (TimeRangePatch)this[IndexOf(existingPatch) - 1];
-                    previousPatch.ShrinkEndTo(patchToBeAdded.Start);
-                    existingPatch.Move(-patchToBeAdded.Duration); // this is a preparation for the following insert action
-                    insertAction = trp => base.Insert(indexAtWhichThePatchShallBeAdded, trp);
-                    // not only do we have to add the patch at this index later but also we need to modify the existing patch because its predecessor changed
-                    var futureToken = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));
-                    var updatedPatch = new JsonDiffPatch().Diff(changedToken, futureToken);
-                    existingPatch.Patch = System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(updatedPatch));
-                }
-                else
-                {
-                    throw new NotImplementedException();
+                    case null:
+                        throw new ArgumentNullException(nameof(futurePatchBehaviour));
+                    case FuturePatchBehaviour.KeepTheFuture:
+                    {
+                        patchToBeAdded.ShrinkEndTo(intersection.Start);
+                        //var previousPatch = (TimeRangePatch)this[IndexOf(existingPatch) - 1];
+                        //previousPatch.ShrinkEndTo(patchToBeAdded.Start);
+                        // existingPatch.Move(-patchToBeAdded.Duration); // this is a preparation for the following insert action
+                        //if (End == DateTime.MaxValue)
+                        //{
+                        //    ((TimeRangePatch)Last).ShrinkEndTo(Last.End - patchToBeAdded.Duration);
+                        //}
+                        insertAction = trp =>
+                        {
+                            base.Insert(indexAtWhichThePatchShallBeAdded, trp);
+                        };
+                        // not only do we have to add the patch at this index later but also we need to modify the existing patch because its predecessor changed
+                        var futureToken = JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start)));
+                        var updatedPatch = new JsonDiffPatch().Diff(changedToken, futureToken);
+                        existingPatch.Patch = System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(updatedPatch));
+                        break;
+                    }
+                    default:
+                        throw new NotImplementedException();
                 }
             }
             else
             {
                 throw new NotImplementedException();
             }
+            
         }
 
         insertAction(patchToBeAdded);
+        */
     }
 
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
