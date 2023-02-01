@@ -65,6 +65,9 @@ public class TimeRangePatchChainTests
         trpCollection.Add(myEntity, myChangedEntity, keyDate);
         var actual = trpCollection.PatchToDate(myEntity, keyDate + TimeSpan.FromDays(daysToKeyDate));
         actual.MyProperty.Should().Be(expectedProperty);
+
+        trpCollection.HasStart.Should().BeFalse();
+        trpCollection.HasEnd.Should().BeFalse();
     }
 
     /// <summary>
@@ -98,6 +101,9 @@ public class TimeRangePatchChainTests
         actualA.MyProperty.Should().Be("bar");
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
+
+        trpCollection.HasStart.Should().BeFalse();
+        trpCollection.HasEnd.Should().BeFalse();
     }
 
     /// <summary>
@@ -131,6 +137,9 @@ public class TimeRangePatchChainTests
         actualA.MyProperty.Should().Be("bar");
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
+
+        trpCollection.HasStart.Should().BeFalse();
+        trpCollection.HasEnd.Should().BeFalse();
     }
 
     /// <summary>
@@ -176,41 +185,8 @@ public class TimeRangePatchChainTests
 
         var actualD = trpCollection.PatchToDate(myEntity, keyDateD);
         actualD.MyProperty.Should().Be("D");
-    }
 
-    [Fact]
-    public void Test_Insert_Into_A_TimePeriodChain_Without_An_End()
-    {
-        var itemAStart = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        itemAStart = DateTime.MinValue;
-        var chain = new TimePeriodChain();
-        var itemA = new TimeRange
-        {
-            Start = itemAStart,
-            End = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
-        };
-        var itemC = new TimeRange
-        {
-            Start = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            End = DateTime.MaxValue
-        };
-        chain.Add(itemA);
-        chain.Add(itemC);
-        // now the chain looks like this:
-        // Min     2023         2024         2025             Max
-        //  |...----|------------|------------|-------------...|--> time
-        //          [--itemA-----------------)[---itemC-----...)
-
-
-        var itemB = new TimeRange
-        {
-            Start = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            End = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        };
-        // now i want to insert itemB into the chain, such that
-        // Min     2023         2024         2025             Max
-        //  |...----|------------|------------|-------------...|--> time
-        //          [--itemA----)[---itemB---)[----itemC----...)
-        chain.Add(itemB); // works
+        trpCollection.HasStart.Should().BeFalse();
+        trpCollection.HasEnd.Should().BeFalse();
     }
 }
