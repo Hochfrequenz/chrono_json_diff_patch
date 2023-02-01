@@ -165,7 +165,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     throw new NotImplementedException();
             }
         }
-        bool endHasBeenShrinked = false;
+        var endHasBeenShrinked = false;
         if (!HasEnd)
         {
             // if the existing TimePeriodChain reaches from [MinValue to MaxValue),
@@ -179,7 +179,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             endHasBeenShrinked = true;
         }
 
-        bool startHasBeenShrinked = false;
+        var startHasBeenShrinked = false;
         if (!HasStart)
         {
             // this is to prevent the code from crashing at "CheckSpaceBefore"
@@ -197,6 +197,13 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         }
     }
 
+    /// <summary>
+    /// start at <paramref name="initialEntity"/> at beginning of time.
+    /// Then apply all the patches up to <paramref name="keyDate"/> and return the state of the entity at <paramref name="keyDate"/>
+    /// </summary>
+    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
+    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
+    /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
         var jdp = new JsonDiffPatch();
