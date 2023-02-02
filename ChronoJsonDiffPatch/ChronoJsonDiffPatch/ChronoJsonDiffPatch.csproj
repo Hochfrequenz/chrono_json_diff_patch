@@ -11,6 +11,11 @@
       <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
 
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <DocumentationFile>bin\Debug\ChronoJsonDiffPatch.xml</DocumentationFile>
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
     <ItemGroup>
       <PackageReference Include="JsonDiffPatch.Net" Version="2.3.0" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
