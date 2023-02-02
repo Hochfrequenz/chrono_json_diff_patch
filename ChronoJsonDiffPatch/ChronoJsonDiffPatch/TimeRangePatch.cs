@@ -69,7 +69,7 @@ public class TimeRangePatch : TimeRange
     [JsonPropertyName("timestamp")]
     [JsonPropertyOrder(13)]
     [JsonProperty(PropertyName = "timestamp", Order = 13)]
-    public DateTimeOffset? Timestamp { get; set; }
+    public DateTime? Timestamp { get; set; }
 
     /// <summary>
     /// empty constructor (required for JSON deserialization)
