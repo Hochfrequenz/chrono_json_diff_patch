@@ -12,10 +12,10 @@ Install it from nuget [ChronoJsonDiffPatch](https://www.nuget.org/packages/Chron
 dotnet add package ChronoJsonDiffPatch
 ```
 
-| Version          | Number                                                           |
-|------------------|------------------------------------------------------------------|
-| Stable | ![Nuget Package](https://badgen.net/nuget/v/ChronoJsonDiffPatch) |
-| Pre-Release | ![Nuget Prerelease](https://badgen.net/nuget/v/ChronoJsonDiffPatch/pre)    |
+| Version     | Number                                                                  |
+| ----------- | ----------------------------------------------------------------------- |
+| Stable      | ![Nuget Package](https://badgen.net/nuget/v/ChronoJsonDiffPatch)        |
+| Pre-Release | ![Nuget Prerelease](https://badgen.net/nuget/v/ChronoJsonDiffPatch/pre) |
 
 ## Usage
 
@@ -57,13 +57,13 @@ chain.Add(myEntityInitially, myEntityFoo, fooDate);
 var barDate = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
 var myEntityBar = new MyEntity
 {
-    MyProperty = "bar" // at barDate, MyProperty switches from "foo" to "bar" 
+    MyProperty = "bar" // at barDate, MyProperty switches from "foo" to "bar"
 };
 // also track the changes at barDate
 chain.Add(myEntityInitially, myEntityBar, barDate);
 
 // Now if you know the initial state of myEntity + the chain,
-// you can retrieve the state of myEntity at any date, by applying the 
+// you can retrieve the state of myEntity at any date, by applying the
 // chronological patches to the initial state.
 var anyDateBeforeFooDate = new DateTimeOffset(1995, 1, 1, 0, 0, 0, TimeSpan.Zero);
 var stateBeforeFooDate = chain.PatchToDate(myEntityInitially, anyDateBeforeFooDate);
@@ -77,12 +77,13 @@ stateAtFooDate.MyProperty.Should().Be("foo");
 var stateAtBarDate = chain.PatchToDate(myEntityInitially, barDate);
 stateAtBarDate.MyProperty.Should().Be("bar");
 ```
+
 Find the full example in [`ShowCaseTest.cs`](ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/ShowCaseTest.cs).
 
 Internally the chain only saves the differential changes/JsonDiffPatches at the given dates:
 
-| Index | Start | End | JsonDiffPatch                      |
-|-------|-------|-----|------------------------------------|
-|0|`DateTime.MinValue`|`fooDate`| `null`                             |
-|1|`fooDate`|`barDate`| `{"myProperty":["initial","foo"]}` |
-|2|`barDate`|`DateTime.MaxValue`| `{"myProperty":["foo","bar"]}`     |         
+| Index | Start               | End                 | JsonDiffPatch                      |
+| ----- | ------------------- | ------------------- | ---------------------------------- |
+| 0     | `DateTime.MinValue` | `fooDate`           | `null`                             |
+| 1     | `fooDate`           | `barDate`           | `{"myProperty":["initial","foo"]}` |
+| 2     | `barDate`           | `DateTime.MaxValue` | `{"myProperty":["foo","bar"]}`     |
