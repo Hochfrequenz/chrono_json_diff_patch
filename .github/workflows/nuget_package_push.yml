@@ -33,6 +33,8 @@ jobs:
         uses: warrenbuckley/Setup-Nuget@v1
       - name: Nuget push TimeSlice
         working-directory: "ChronoJsonDiffPatch/ChronoJsonDiffPatch"
+        # token: https://github.com/Hochfrequenz/chrono_json_diff_patch/settings/secrets/actions/NUGET_ORG_PUSH_TOKEN
+        # expires 2024-02-02
         run: |
-          nuget setApiKey ${{ secrets.TIMESLICE_NUGET_ORG_PUSH_TOKEN }}
+          nuget setApiKey ${{ secrets.NUGET_ORG_PUSH_TOKEN }}
           nuget push .\bin\Release\*.nupkg -Source https://api.nuget.org/v3/index.json -SkipDuplicate -NoSymbols
