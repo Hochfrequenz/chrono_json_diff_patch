@@ -177,20 +177,20 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         }
                         else
                         {
-                            var foos = existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
+                            var itemsLeftOfTheGap = existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
                             bool anythingHasBeenShrunk = false;
-                            foreach (var foo in foos)
+                            foreach (var itemLeftOfTheGap in itemsLeftOfTheGap)
                             {
-                                if (GetAll().SingleOrDefault(p => p.Start == foo.Start && p.End >= foo.End) is { } aPatch)
+                                if (GetAll().SingleOrDefault(p => p.Start == itemLeftOfTheGap.Start && p.End >= itemLeftOfTheGap.End) is { } aPatch)
                                 {
-                                    aPatch.ShrinkTo(foo);
+                                    aPatch.ShrinkTo(itemLeftOfTheGap);
                                     anythingHasBeenShrunk = true;
                                 }
                             }
 
                             if (!anythingHasBeenShrunk)
                             {
-                                GetAll().Last(p => p.Start < patchToBeAdded.Start).ShrinkEndTo(foos.First(p => p.End >= patchToBeAdded.Start).End);
+                                GetAll().Last(p => p.Start < patchToBeAdded.Start).ShrinkEndTo(itemsLeftOfTheGap.First(p => p.End >= patchToBeAdded.Start).End);
                             }
                         }
                         var thoseItemsAfterTheGap = GetAll().Where(s => s.Start > patchToBeAdded.Start);
