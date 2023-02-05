@@ -103,6 +103,11 @@ public class TimeRangePatchChainTests
 
         trpCollection.HasStart.Should().BeFalse();
         trpCollection.HasEnd.Should().BeFalse();
+        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
     }
 
     /// <summary>
@@ -139,6 +144,12 @@ public class TimeRangePatchChainTests
 
         trpCollection.HasStart.Should().BeFalse();
         trpCollection.HasEnd.Should().BeFalse();
+
+        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
     }
 
     /// <summary>
@@ -187,6 +198,11 @@ public class TimeRangePatchChainTests
 
         trpCollection.HasStart.Should().BeFalse();
         trpCollection.HasEnd.Should().BeFalse();
+        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
     }
 
     /// <summary>
@@ -226,5 +242,50 @@ public class TimeRangePatchChainTests
 
         trpCollection.HasStart.Should().BeFalse();
         trpCollection.HasEnd.Should().BeFalse();
+        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void Test_Patching_Many_Dates()
+    {
+        var chain = new TimeRangePatchChain<DummyClass>();
+        var initialEntity = new DummyClass
+        {
+            MyProperty = "initial"
+        };
+        var datesAndValues = new Dictionary<DateTimeOffset, string>
+        {
+            { new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), "2022" },
+            { new DateTimeOffset(1990, 1, 1, 0, 0, 0, TimeSpan.Zero), "1990" },
+            { new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero), "2027" },
+            { new DateTimeOffset(2029, 1, 1, 0, 0, 0, TimeSpan.Zero), "2029" },
+            { new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero), "2025" },
+        };
+        foreach (var (patchDatetime, value) in datesAndValues)
+        {
+            var patchedEntity = new DummyClass
+            {
+                MyProperty = value
+            };
+            chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+        }
+
+        chain.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => p.Start.Month.Should().Be(1))
+            .And.AllSatisfy(p => p.Start.Day.Should().Be(1))
+            .And.AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+        foreach (var (keyDate, beschreibung) in datesAndValues.Skip(1))
+        {
+            keyDate.Hour.Should().Be(0);
+            var actualAtKeyDate = chain.PatchToDate(initialEntity, keyDate);
+            actualAtKeyDate.MyProperty.Should().Be(beschreibung);
+        }
     }
 }

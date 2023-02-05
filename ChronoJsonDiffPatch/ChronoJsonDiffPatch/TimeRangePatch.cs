@@ -31,7 +31,7 @@ public class TimeRangePatch : TimeRange
     public DateTimeOffset From
     {
         get => Start == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(Start);
-        set => Start = value == DateTimeOffset.MinValue ? DateTime.MinValue : value.UtcDateTime;
+        set => Start = value == DateTimeOffset.MinValue ? DateTimeOffset.MinValue.UtcDateTime : value.UtcDateTime;
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ public class TimeRangePatch : TimeRange
             }
             else
             {
-                End = DateTime.MaxValue;
+                End = DateTimeOffset.MaxValue.UtcDateTime;
             }
         }
     }
@@ -91,8 +91,8 @@ public class TimeRangePatch : TimeRange
     /// </summary>
     public TimeRangePatch(DateTimeOffset from, JsonDocument? patch, DateTimeOffset? to = null)
     {
-        From = from;
         To = to;
+        From = from;
         Patch = patch;
     }
 
