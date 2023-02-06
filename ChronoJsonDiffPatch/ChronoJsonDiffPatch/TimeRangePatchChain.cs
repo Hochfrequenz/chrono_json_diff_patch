@@ -73,7 +73,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <returns></returns>
     public IEnumerable<TimeRangePatch> GetAll()
     {
-        return this.Cast<TimeRangePatch>();
+        return this.Cast<TimeRangePatch>().OrderBy(trp=>trp.From).ThenBy(trp=>trp.End);
     }
 
     /// <summary>
