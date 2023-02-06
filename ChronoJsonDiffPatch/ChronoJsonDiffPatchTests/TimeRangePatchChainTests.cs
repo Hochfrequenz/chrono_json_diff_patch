@@ -288,4 +288,34 @@ public class TimeRangePatchChainTests
             actualAtKeyDate.MyProperty.Should().Be(beschreibung);
         }
     }
+
+    [Fact]
+    public void Test_Patching_Add_Constructor()
+    {
+        var chain = new TimeRangePatchChain<DummyClass>();
+        var initialEntity = new DummyClass
+        {
+            MyProperty = "initial"
+        };
+        var datesAndValues = new Dictionary<DateTimeOffset, string>
+        {
+            { new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), "2022" },
+            { new DateTimeOffset(1990, 1, 1, 0, 0, 0, TimeSpan.Zero), "1990" },
+            { new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero), "2027" },
+            { new DateTimeOffset(2029, 1, 1, 0, 0, 0, TimeSpan.Zero), "2029" },
+            { new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero), "2025" },
+        };
+        foreach (var (patchDatetime, value) in datesAndValues)
+        {
+            var patchedEntity = new DummyClass
+            {
+                MyProperty = value
+            };
+            chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+        }
+
+        // now instantiate another chain by using the chains of the existing one:
+        var anotherChain = new TimeRangePatchChain<DummyClass>(chain.GetAll()); // must not throw an exception
+        anotherChain.Should().BeEquivalentTo(chain);
+    }
 }
