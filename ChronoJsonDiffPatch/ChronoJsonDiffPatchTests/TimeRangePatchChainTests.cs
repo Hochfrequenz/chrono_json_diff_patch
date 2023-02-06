@@ -288,7 +288,7 @@ public class TimeRangePatchChainTests
             actualAtKeyDate.MyProperty.Should().Be(beschreibung);
         }
     }
-    
+
     [Fact]
     public void Test_Patching_Add_Constructor()
     {
@@ -313,7 +313,7 @@ public class TimeRangePatchChainTests
             };
             chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
         }
-        
+
         // now instantiate another chain by using the chains of the existing one:
         var anotherChain = new TimeRangePatchChain<DummyClass>(chain.GetAll()); // must not throw an exception
         anotherChain.Should().BeEquivalentTo(chain);
