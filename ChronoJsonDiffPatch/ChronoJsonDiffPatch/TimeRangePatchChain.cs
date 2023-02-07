@@ -73,7 +73,9 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <returns></returns>
     public IEnumerable<TimeRangePatch> GetAll()
     {
-        return this.Cast<TimeRangePatch>().OrderBy(trp => trp.From).ThenBy(trp => trp.End);
+        return this.Cast<TimeRangePatch>()
+            .OrderBy(trp => trp.From)
+            .ThenBy(trp => trp.End);
     }
 
     /// <summary>
@@ -145,8 +147,6 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         bool anyExistingSliceStartsLater = GetAll().Any(trp => trp.Start > patchToBeAdded.Start);
         if (anyExistingSliceStartsLater)
         {
-            //var lastExistingOverlappingPatch = GetAll().Last(trp => trp.Start < patchToBeAdded.Start && trp.OverlapsWith(patchToBeAdded));
-            //lastExistingOverlappingPatch.ShrinkEndTo(patchToBeAdded.Start);
             switch (futurePatchBehaviour)
             {
                 case null:
@@ -204,8 +204,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         }
         else
         {
-            var itemsLeftOfTheGap =
-                existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
+            var itemsLeftOfTheGap = existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
             bool anythingHasBeenShrunk = false;
             foreach (var itemLeftOfTheGap in itemsLeftOfTheGap)
             {
@@ -231,8 +230,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         }
 
 
-        bool startHasToBeShifted =
-            indexAtWhichThePatchShallBeAdded < this.Count - 1 && !HasStart; // this triggers the CheckSpaceBefore() check
+        bool startHasToBeShifted = indexAtWhichThePatchShallBeAdded < Count - 1 && !HasStart; // this triggers the CheckSpaceBefore() check
         if (startHasToBeShifted)
         {
             ((TimeRangePatch)First).ShrinkStartTo((DateTimeOffset.MinValue + patchToBeAdded.Duration).UtcDateTime);
@@ -242,6 +240,16 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         if (startHasToBeShifted)
         {
             // don't ask. it passes the tests. that's all I wished for today
+            var itemsLeftOfTheAddedPatch = this.Where(p => p.Start < patchToBeAdded.Start).Cast<TimeRangePatch>();
+            foreach (var itemLeftOfTheAddedPatch in itemsLeftOfTheAddedPatch)
+            {
+                // OK... someone explain me this behaviour:
+                // If, before the insert, I move the items _after_ the keydate to the left,
+                // then, after the insert I have to move items _before_ the keydate to the right.
+                // I think this line just fixes symptoms. The causes are elsewhere.
+                // this is purely testdriven... maybe tobias is right and we should just write the timeperiod code by ourselfs ;)
+                itemLeftOfTheAddedPatch.Move(patchToBeAdded.Duration);
+            }
             if (HasStart)
             {
                 ((TimeRangePatch)First).ExpandStartTo(DateTimeOffset.MinValue.UtcDateTime);
@@ -266,6 +274,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         lastOverlappingPatchWhichIsNotDeleted.ShrinkEndTo(patchToBeAdded.Start);
         Add(patchToBeAdded);
     }
+
 
     /// <summary>
     /// start at <paramref name="initialEntity"/> at beginning of time.
