@@ -147,8 +147,6 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         bool anyExistingSliceStartsLater = GetAll().Any(trp => trp.Start > patchToBeAdded.Start);
         if (anyExistingSliceStartsLater)
         {
-            //var lastExistingOverlappingPatch = GetAll().Last(trp => trp.Start < patchToBeAdded.Start && trp.OverlapsWith(patchToBeAdded));
-            //lastExistingOverlappingPatch.ShrinkEndTo(patchToBeAdded.Start);
             switch (futurePatchBehaviour)
             {
                 case null:
@@ -245,8 +243,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             var itemsLeftOfTheAddedPatch = this.Where(p => p.Start < patchToBeAdded.Start).Cast<TimeRangePatch>();
             foreach (var itemLeftOfTheAddedPatch in itemsLeftOfTheAddedPatch)
             {
-                // ok, someone explain me this behaviour: if, before the insert, I move the items _after_ the keydate to the left,
-                // then, after the insert I have to move items _before_ the keydate to the right
+                // OK... someone explain me this behaviour:
+                // If, before the insert, I move the items _after_ the keydate to the left,
+                // then, after the insert I have to move items _before_ the keydate to the right.
+                // I think this line just fixes symptoms. The causes are elsewhere.
                 // this is purely testdriven... maybe tobias is right and we should just write the timeperiod code by ourselfs ;)
                 itemLeftOfTheAddedPatch.Move(patchToBeAdded.Duration);
             }
