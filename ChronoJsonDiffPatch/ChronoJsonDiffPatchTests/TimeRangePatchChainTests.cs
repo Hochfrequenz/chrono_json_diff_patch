@@ -283,10 +283,12 @@ public class TimeRangePatchChainTests
         chain.Where(p => p.End != DateTime.MaxValue).Should()
             .AllSatisfy(p => p.Start.Month.Should().Be(1))
             .And.AllSatisfy(p => p.Start.Day.Should().Be(1))
+            .And.AllSatisfy(p => p.End.Day.Should().Be(1))
             .And.AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
             .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
             .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
             .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+
 
         var actualBeforePatch = chain.PatchToDate(initialEntity, new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero));
         actualBeforePatch.MyProperty.Should().Be(initialEntity.MyProperty);
@@ -297,6 +299,9 @@ public class TimeRangePatchChainTests
             var actualAtKeyDate = chain.PatchToDate(initialEntity, keyDate);
             actualAtKeyDate.MyProperty.Should().Be(beschreibung);
         }
+
+        chain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
     }
 
     [Fact]
@@ -324,8 +329,15 @@ public class TimeRangePatchChainTests
             chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
         }
 
+        chain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        chain.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
+        chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
+
         // now instantiate another chain by using the chains of the existing one:
         var anotherChain = new TimeRangePatchChain<DummyClass>(chain.GetAll()); // must not throw an exception
         anotherChain.Should().BeEquivalentTo(chain);
+        anotherChain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        anotherChain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
     }
 }
