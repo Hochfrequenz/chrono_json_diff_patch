@@ -96,6 +96,9 @@ public class TimeRangePatchChainTests
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
+        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be("foo");
+
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
         actualA.MyProperty.Should().Be("bar");
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
@@ -137,6 +140,9 @@ public class TimeRangePatchChainTests
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
         }
+        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be("foo");
+
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
         actualA.MyProperty.Should().Be("bar");
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
@@ -281,6 +287,10 @@ public class TimeRangePatchChainTests
             .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
             .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
             .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+
+        var actualBeforePatch = chain.PatchToDate(initialEntity, new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be(initialEntity.MyProperty);
+
         foreach (var (keyDate, beschreibung) in datesAndValues.Skip(1))
         {
             keyDate.Hour.Should().Be(0);
