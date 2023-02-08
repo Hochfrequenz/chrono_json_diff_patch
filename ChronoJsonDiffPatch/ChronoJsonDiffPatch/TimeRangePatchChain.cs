@@ -9,8 +9,8 @@ namespace ChronoJsonDiffPatch;
 /// Assume
 /// * There are two key dates: dtA and dtB
 /// * dtB &gt; dtA
-/// * There is a patchA at dtA that puts our entity in state A.
-/// * There is a patchB at dtB that puts our entity in state B. 
+/// * There is a patchA at dtA that puts our entity in state A (assuming you use <see cref="PatchingDirection.ParallelWithTime"/>).
+/// * There is a patchB at dtB that puts our entity in state B (assuming you use <see cref="PatchingDirection.ParallelWithTime"/>).
 /// If the patching order is now: (patchB, patchA), what is the desired state at dtB?
 /// This enums allows you to distinguish the behaviour of <see cref="TimeRangePatchChain{TEntity}.Add(TEntity,TEntity,System.DateTimeOffset,System.Nullable{ChronoJsonDiffPatch.FuturePatchBehaviour})"/>
 /// </summary>
@@ -24,6 +24,31 @@ public enum FuturePatchBehaviour
     /// The future (&gt;= dtB) shall have state B: the second patchA only lasts in the interval between [A,B)
     /// </summary>
     KeepTheFuture,
+}
+
+/// <summary>
+/// Assume
+/// * There are two key dates: dtA and dtB
+/// * dtB &gt; dtA
+/// This enum describes if we model the <see cref="TimeRangePatchChain{TEntity}"/> as patches that are applied from earlier to later times or the other way around.
+/// </summary>
+public enum PatchingDirection
+{
+    /// <summary>
+    /// <see cref="TimeRangePatch.Patch"/>es are modelled as transitions from dtA to dtB.
+    /// You could also refer to this as "left to right" on a time axis.
+    /// </summary>
+    /// <remarks>This is the patching direction that feels "natural".</remarks>
+    ParallelWithTime,
+    /// <summary>
+    /// <see cref="TimeRangePatch.Patch"/>es are modelled as transitions from dtB to dtA.
+    /// You could also refer to this as "right to left" on a time axis.
+    /// </summary>
+    /// <remarks>
+    /// Although this doesn't feel as natural as <see cref="ParallelWithTime"/>, it might useful if you store changes to an entity in a database and you always want to have the most recent/youngest state as "full" entity and persist the past as patches.
+    /// Then you always start with the youngest entity and patch "backwards" until you reach the point in time/in the past in which you're interested. 
+    /// </remarks>
+    AntiparallelWithTime,
 }
 
 /// <summary>
@@ -54,17 +79,19 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     }
     private readonly Func<TEntity, string> _serializer;
     private readonly Func<string, TEntity> _deserializer;
-
+    private readonly PatchingDirection _patchingDirection;
     /// <summary>
     /// initialize the collection by providing a list of time periods
     /// </summary>
     /// <param name="timeperiods"></param>
+    /// <param name="patchingDirection"><see cref="PatchingDirection"/></param>
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
-    public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(timeperiods ?? new List<TimeRangePatch> { })
+    public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime, Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(timeperiods ?? new List<TimeRangePatch> { })
     {
         _serializer = serializer ?? DefaultSerializer;
         _deserializer = deserializer ?? DefaultDeSerializer;
+        _patchingDirection = patchingDirection;
     }
 
     /// <summary>

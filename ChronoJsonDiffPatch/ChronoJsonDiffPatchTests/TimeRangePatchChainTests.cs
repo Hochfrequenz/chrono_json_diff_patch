@@ -340,4 +340,60 @@ public class TimeRangePatchChainTests
         anotherChain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
         anotherChain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
     }
+    
+    [Fact]
+    public void Test_Patching_In_The_Past_Raises_Exception_If_no_Behaviour_Is_Specified()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to bar at keydate B
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateB);
+        }
+        Action addInThePastWithoutSpecifyingBehaviour;
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
+            };
+            addInThePastWithoutSpecifyingBehaviour = ()=>trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
+        }
+        addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
+    }
+    
+    [Fact]
+    public void Test_Patching_Backwards()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to bar at keydate B
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateB);
+        }
+        Action addInThePastWithoutSpecifyingBehaviour;
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
+            };
+            addInThePastWithoutSpecifyingBehaviour = ()=>trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
+        }
+        addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
+    }
 }
