@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using ChronoJsonDiffPatch;
 using FluentAssertions;
+using Itenso.TimePeriod;
 
 namespace ChronoJsonDiffPatchTests;
 
@@ -10,6 +11,38 @@ public class TimeRangePatchChainTests
     {
         [JsonPropertyName("myProperty")]
         public string MyProperty { get; set; }
+    }
+
+    /// <summary>
+    /// checks that the given <paramref name="chain"/> passes basic sanity checks
+    /// </summary>
+    /// <param name="chain"></param>
+    private static void AssertBasicSanity(DummyClass stateAtMinusInfinity, TimeRangePatchChain<DummyClass> chain)
+    {
+        chain.HasStart.Should().BeFalse();
+        chain.HasEnd.Should().BeFalse();
+
+        chain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        chain.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
+        chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
+
+        chain.Where(p => p.End != DateTime.MaxValue).Should()
+            // the assertions on seconds/minute/day of the patches are just because we only use full dates in the tests
+            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
+            .And.AllSatisfy(p => p.Start.Day.Should().Be(1))
+            .And.AllSatisfy(p => p.End.Day.Should().Be(1))
+            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+
+        chain.Where(p => p.End != DateTime.MaxValue).Should()
+            .AllSatisfy(p => chain.Any(q => q.Start == p.End).Should().BeTrue(), because: "The ends of all entries p shall be the start of another entry q");
+        chain.Where(p => p.Start != DateTime.MinValue).Should()
+            .AllSatisfy(p => chain.Any(q => q.End == p.Start).Should().BeTrue(), because: "The starts of all entries p shall be the end of another entry q");
+
+        //var (stateAtPlusInfinity, reversedChain) = chain.Reverse(initialEntity: stateAtMinusInfinity);
+        //reversedChain.PatchingDirection.Should().NotBe(chain.PatchingDirection);
     }
 
     [Fact]
@@ -65,8 +98,7 @@ public class TimeRangePatchChainTests
         var actual = trpCollection.PatchToDate(myEntity, keyDate + TimeSpan.FromDays(daysToKeyDate));
         actual.MyProperty.Should().Be(expectedProperty);
 
-        trpCollection.HasStart.Should().BeFalse();
-        trpCollection.HasEnd.Should().BeFalse();
+        AssertBasicSanity(myEntity, trpCollection);
     }
 
     /// <summary>
@@ -104,13 +136,12 @@ public class TimeRangePatchChainTests
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
 
-        trpCollection.HasStart.Should().BeFalse();
-        trpCollection.HasEnd.Should().BeFalse();
-        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
-            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+        AssertBasicSanity(myEntity, trpCollection);
+
+        var (entityAtEndOfTime, reversedChain) = trpCollection.Reverse(myEntity);
+        entityAtEndOfTime.Should().BeEquivalentTo(actualB);
+        reversedChain.PatchingDirection.Should().Be(PatchingDirection.AntiparallelWithTime);
+
     }
 
     /// <summary>
@@ -148,14 +179,7 @@ public class TimeRangePatchChainTests
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("baz");
 
-        trpCollection.HasStart.Should().BeFalse();
-        trpCollection.HasEnd.Should().BeFalse();
-
-        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
-            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+        AssertBasicSanity(myEntity, trpCollection);
     }
 
     /// <summary>
@@ -185,6 +209,8 @@ public class TimeRangePatchChainTests
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateC, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
         }
+        AssertBasicSanity(myEntity, trpCollection);
+
         var keyDateB = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myAnotherEntity = new DummyClass
@@ -195,20 +221,15 @@ public class TimeRangePatchChainTests
         }
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("B");
+        AssertBasicSanity(myEntity, trpCollection);
 
         var actualC = trpCollection.PatchToDate(myEntity, keyDateC);
         actualC.MyProperty.Should().Be("C");
+        AssertBasicSanity(myEntity, trpCollection);
 
         var actualD = trpCollection.PatchToDate(myEntity, keyDateD);
         actualD.MyProperty.Should().Be("D");
-
-        trpCollection.HasStart.Should().BeFalse();
-        trpCollection.HasEnd.Should().BeFalse();
-        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
-            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+        AssertBasicSanity(myEntity, trpCollection);
     }
 
     /// <summary>
@@ -246,13 +267,7 @@ public class TimeRangePatchChainTests
         actualC = trpCollection.PatchToDate(myEntity, keyDateC); // again
         actualC.MyProperty.Should().Be("B"); // not C because overwrite the future
 
-        trpCollection.HasStart.Should().BeFalse();
-        trpCollection.HasEnd.Should().BeFalse();
-        trpCollection.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
-            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+        AssertBasicSanity(myEntity, trpCollection);
     }
 
     [Fact]
@@ -278,17 +293,8 @@ public class TimeRangePatchChainTests
                 MyProperty = value
             };
             chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+            AssertBasicSanity(initialEntity, chain);
         }
-
-        chain.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.Start.Month.Should().Be(1))
-            .And.AllSatisfy(p => p.Start.Day.Should().Be(1))
-            .And.AllSatisfy(p => p.End.Day.Should().Be(1))
-            .And.AllSatisfy(p => p.End.Second.Should().Be(0)) // no 23:59:59.9999, please
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0))
-            .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
-
 
         var actualBeforePatch = chain.PatchToDate(initialEntity, new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero));
         actualBeforePatch.MyProperty.Should().Be(initialEntity.MyProperty);
@@ -327,20 +333,14 @@ public class TimeRangePatchChainTests
                 MyProperty = value
             };
             chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+            AssertBasicSanity(initialEntity, chain);
         }
-
-        chain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
-        chain.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
-        chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
-        chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
-
         // now instantiate another chain by using the chains of the existing one:
         var anotherChain = new TimeRangePatchChain<DummyClass>(chain.GetAll()); // must not throw an exception
         anotherChain.Should().BeEquivalentTo(chain);
-        anotherChain.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
-        anotherChain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
+        AssertBasicSanity(initialEntity, anotherChain);
     }
-    
+
     [Fact]
     public void Test_Patching_In_The_Past_Raises_Exception_If_no_Behaviour_Is_Specified()
     {
@@ -364,11 +364,11 @@ public class TimeRangePatchChainTests
             {
                 MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
             };
-            addInThePastWithoutSpecifyingBehaviour = ()=>trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
+            addInThePastWithoutSpecifyingBehaviour = () => trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
         }
         addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
     }
-    
+
     [Fact]
     public void Test_Patching_Backwards()
     {
@@ -392,7 +392,7 @@ public class TimeRangePatchChainTests
             {
                 MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
             };
-            addInThePastWithoutSpecifyingBehaviour = ()=>trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
+            addInThePastWithoutSpecifyingBehaviour = () => trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
         }
         addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
     }
