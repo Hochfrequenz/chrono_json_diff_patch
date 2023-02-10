@@ -27,12 +27,12 @@ public class TimeRangePatchChainTests
         chain.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
         chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
         chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
-        
+
         chain.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0), because:"in our tests we only use second 0")
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0), because:"in our tests we only use minute 0")
-            .And.AllSatisfy(p => p.Start.Day.Should().Be(1), because:"in our tests we only use day 1")
-            .And.AllSatisfy(p => p.End.Day.Should().Be(1), because:"in out tests we only use day 1")
+            .AllSatisfy(p => p.End.Second.Should().Be(0), because: "in our tests we only use second 0")
+            .And.AllSatisfy(p => p.End.Minute.Should().Be(0), because: "in our tests we only use minute 0")
+            .And.AllSatisfy(p => p.Start.Day.Should().Be(1), because: "in our tests we only use day 1")
+            .And.AllSatisfy(p => p.End.Day.Should().Be(1), because: "in out tests we only use day 1")
             .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
             .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc))
             .And.Subject.Cast<TimeRangePatch>().Should()
