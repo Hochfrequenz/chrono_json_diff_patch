@@ -81,19 +81,35 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         return System.Text.Json.JsonSerializer.Deserialize<TEntity>(json)!;
     }
 
-    private readonly Func<TEntity, string> _serializer;
-    private readonly Func<string, TEntity> _deserializer;
-    private PatchingDirection _patchingDirection;
+    private readonly Func<TEntity, string> _serialize;
+    private readonly Func<string, TEntity> _deserialize;
+
+    /// <summary>
+    /// converts the given <paramref name="entity"/> to an JToken using the serializer configured in the constructor (or default) 
+    /// </summary>
+    /// <param name="entity"></param>
+    /// <returns></returns>
+    protected JToken ToJToken(TEntity entity)
+    {
+        return JToken.Parse(_serialize(entity));
+    }
+
+    /// <summary>
+    /// converts the given <paramref name="jsonDiffPatch"/> to a <see cref="System.Text.Json.JsonDocument"/> using (default) Newtonsoft
+    /// </summary>
+    /// <param name="jsonDiffPatch"></param>
+    /// <returns></returns>
+    /// <remarks>I don't know why it uses Newtonsoft; It's just like the MWE of JsonDiffPatch</remarks>
+    protected System.Text.Json.JsonDocument ToJsonDocument(JToken jsonDiffPatch)
+    {
+        return System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(jsonDiffPatch));
+    }
 
     /// <summary>
     /// The patching direction describes how the patches are sorted; See <see cref="PatchingDirection"/>
     /// It's a readonly property, because changing the property does require changing the data as well.
     /// </summary>
-    public PatchingDirection PatchingDirection
-    {
-        get => _patchingDirection;
-        private set => _patchingDirection = value;
-    }
+    public PatchingDirection PatchingDirection { get; private set; }
 
     /// <summary>
     /// initialize the collection by providing a list of time periods
@@ -102,11 +118,17 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="patchingDirection">the direction in which the patches are to be applied; <see cref="PatchingDirection"/></param>
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
-    public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime, Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(timeperiods ?? new List<TimeRangePatch> { })
+    public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
+        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(timeperiods ?? new List<TimeRangePatch> { })
     {
-        _serializer = serializer ?? DefaultSerializer;
-        _deserializer = deserializer ?? DefaultDeSerializer;
-        _patchingDirection = patchingDirection;
+        _serialize = serializer ?? DefaultSerializer;
+        _deserialize = deserializer ?? DefaultDeSerializer;
+        PatchingDirection = patchingDirection;
+        if (timeperiods?.FirstOrDefault(tpr => tpr.PatchingDirection != PatchingDirection) is { } patchWithWrongDirection)
+        {
+            throw new ArgumentException($"You must not add a patch {patchWithWrongDirection} with direction {patchWithWrongDirection.PatchingDirection}!={PatchingDirection}",
+                nameof(timeperiods));
+        }
     }
 
     /// <summary>
@@ -117,6 +139,16 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     public IEnumerable<TimeRangePatch> GetAll()
     {
         var result = this.Cast<TimeRangePatch>();
+        var distinctPatchingDirections = result.DistinctBy(trp => trp.PatchingDirection);
+        if (distinctPatchingDirections.Count() > 1)
+        {
+            throw new InvalidDataException($"The chain is inconsistent; There are > 1 patching directions: {distinctPatchingDirections}");
+        }
+
+        if (distinctPatchingDirections.Count() == 1 && distinctPatchingDirections.Single().PatchingDirection != PatchingDirection)
+        {
+            throw new InvalidDataException($"The chain is inconsistent: The chain patching direction {PatchingDirection} differs from the chains single elements directions {distinctPatchingDirections.Single().PatchingDirection}");
+        }
         return PatchingDirection switch
         {
             PatchingDirection.ParallelWithTime => result.OrderBy(trp => trp.From).ThenBy(trp => trp.End),
@@ -171,31 +203,33 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             throw new NotImplementedException($"Adding patches to chains that have {nameof(PatchingDirection)} {PatchingDirection} is not implemented at the moment");
         }
+
         var jdp = new JsonDiffPatch();
         JToken patchAtKeyDate;
-        var changedToken = JToken.Parse(_serializer(changedEntity));
+        var changedToken = ToJToken(changedEntity);
         if (Count == 0) // seems like this entity has no tracked changes so far
         {
-            var initialToken = JToken.Parse(_serializer(initialEntity));
+            var initialToken = ToJToken(initialEntity);
             // We initially add 2 patches (whose content and start/end depends on the PatchingDirection)
             // 1) an empty patch from the beginning of time (-infinity) up to the moment at which the changes is applied
             //    this means: the entity is unchanged from -infinity up to the given moment.
-            var trpFromBeginningOfTimeUntilKeyDate = new TimeRangePatch(from: DateTimeOffset.MinValue, patch: null, to: moment.UtcDateTime);
+            var trpFromBeginningOfTimeUntilKeyDate = new TimeRangePatch(from: DateTimeOffset.MinValue, patch: null, to: moment.UtcDateTime, patchingDirection: PatchingDirection);
             base.Add(trpFromBeginningOfTimeUntilKeyDate);
             // 2) a patch that describes the changes that happen at the moment
             // their order is such that the index[0] of the list contains the most recent change and index[-1] starts at -infinity
             patchAtKeyDate = jdp.Diff(initialToken, changedToken);
-            var trpSinceKeyDate = new TimeRangePatch(from: moment.UtcDateTime, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patchAtKeyDate)),
-                to: null);
+            var trpSinceKeyDate = new TimeRangePatch(from: moment.UtcDateTime, patch: ToJsonDocument(patchAtKeyDate),
+                to: null, patchingDirection: PatchingDirection);
             base.Add(trpSinceKeyDate);
             return;
         }
 
-        var upToDateToken = JToken.Parse(_serializer(PatchToDate(initialEntity, moment)));
+        var upToDateToken = ToJToken(PatchToDate(initialEntity, moment));
         patchAtKeyDate = jdp.Diff(upToDateToken, changedToken);
         // there are already patches present
         // first add a patch that starts at the change moment and end at +infinity
-        var patchToBeAdded = new TimeRangePatch(from: moment.UtcDateTime, patch: System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(patchAtKeyDate)), to: null);
+        var patchToBeAdded = new TimeRangePatch(from: moment.UtcDateTime, patch: ToJsonDocument(patchAtKeyDate), to: null,
+            patchingDirection: PatchingDirection);
 
         bool anyExistingSliceStartsLater = GetAll().Any(trp => trp.Start > patchToBeAdded.Start);
         if (anyExistingSliceStartsLater)
@@ -236,11 +270,9 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         patchToBeAdded.ShrinkEndTo(new DateTimeOffset(intersection.Start).UtcDateTime);
 
         //we need to modify the existing patch itself because its predecessor changed
-        var tokenAtIntersectionStart =
-            JToken.Parse(_serializer(PatchToDate(initialEntity, intersection.Start.ToUniversalTime())));
+        var tokenAtIntersectionStart = ToJToken(PatchToDate(initialEntity, intersection.Start.ToUniversalTime()));
         var updatedPatch = new JsonDiffPatch().Diff(changedToken, tokenAtIntersectionStart);
-        firstExistingOverlappingPatch.Patch =
-            System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(updatedPatch));
+        firstExistingOverlappingPatch.Patch = ToJsonDocument(updatedPatch);
 
         var subtractor = new TimePeriodSubtractor<TimeRangePatch>();
         ITimePeriodCollection existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded =
@@ -300,7 +332,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 // then, after the insert I have to move items _before_ the keydate to the right.
                 // I think this line just fixes symptoms. The causes are elsewhere.
                 // this is purely testdriven... maybe tobias is right and we should just write the timeperiod code by ourselfs ;)
-                if (itemLeftOfTheAddedPatch.Start != DateTimeOffset.MinValue.UtcDateTime && itemLeftOfTheAddedPatch.Start - patchToBeAdded.Duration == DateTimeOffset.MinValue.UtcDateTime)
+                if (itemLeftOfTheAddedPatch.Start != DateTimeOffset.MinValue.UtcDateTime &&
+                    itemLeftOfTheAddedPatch.Start - patchToBeAdded.Duration == DateTimeOffset.MinValue.UtcDateTime)
                 {
                     itemLeftOfTheAddedPatch.Move(-patchToBeAdded.Duration);
                 }
@@ -347,19 +380,35 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
         var jdp = new JsonDiffPatch();
-        var left = JToken.Parse(_serializer(initialEntity));
-
-        foreach (var existingPatch in this.GetAll()
-                     .Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null)
-                     .Where(p => p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null)
-                     .OrderBy(p => p.Start))
-
+        var left = ToJToken(initialEntity);
+        switch (PatchingDirection)
         {
-            var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
-            left = jdp.Patch(left, jtokenPatch);
-        }
+            case PatchingDirection.ParallelWithTime:
+                {
+                    foreach (var existingPatch in GetAll()
+                                 .Where(p => ((p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue) || p.Start <= keyDate.UtcDateTime) && p.Patch != null)
+                                 .Where(p => p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null))
+                    {
+                        var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
+                        left = jdp.Patch(left, jtokenPatch);
+                    }
 
-        return _deserializer(JsonConvert.SerializeObject(left));
+                    return _deserialize(JsonConvert.SerializeObject(left));
+                }
+            case PatchingDirection.AntiparallelWithTime:
+                {
+                    foreach (var existingPatch in GetAll()
+                                 .Where(p => p.End > keyDate)
+                                 .Where(p => p.Patch != null && p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null))
+                    {
+                        var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
+                        left = jdp.Unpatch(left, jtokenPatch);
+                    }
+                    return _deserialize(JsonConvert.SerializeObject(left));
+                }
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
     }
 
     /// <summary>
@@ -378,20 +427,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
         var stateAtPlusInfinity = PatchToDate(initialEntity, DateTimeOffset.MaxValue);
         List<TimeRangePatch> backwardsPatches = GetAll().OrderByDescending(trp => trp.End).Select(forwardPatch =>
-          {
-              var stateAfterPatchDate = PatchToDate(initialEntity, forwardPatch.Start);
-              DateTime dateBeforePatchStart;
-              dateBeforePatchStart = forwardPatch.Start != DateTimeOffset.MinValue.UtcDateTime ? forwardPatch.Start - TimeSpan.FromTicks(1) : DateTimeOffset.MinValue.UtcDateTime;
-              var stateBeforePatchDate = PatchToDate(initialEntity, dateBeforePatchStart);
-              var backwardPatch = new JsonDiffPatch().Patch(_serializer(stateAfterPatchDate), _serializer(stateBeforePatchDate));
-              var backwardsTpr = new TimeRangePatch
-              {
-                  Start = forwardPatch.Start,
-                  End = forwardPatch.End,
-                  Patch = System.Text.Json.JsonDocument.Parse(JsonConvert.SerializeObject(backwardPatch))
-              };
-              return backwardsTpr;
-          }).OrderBy(trp => trp.From).ToList();
+        {
+            var stateAfterPatchDate = PatchToDate(initialEntity, forwardPatch.Start);
+            //var dateBeforePatchStart = forwardPatch.Start != DateTimeOffset.MinValue.UtcDateTime ? forwardPatch.Start - TimeSpan.FromTicks(1) : DateTimeOffset.MinValue.UtcDateTime;
+            var stateBeforePatchDate = PatchToDate(initialEntity, forwardPatch.End);
+            var backwardPatch = new JsonDiffPatch().Diff(ToJToken(stateAfterPatchDate), ToJToken(stateBeforePatchDate));
+            var backwardsTpr = new TimeRangePatch(from: forwardPatch.Start, to: forwardPatch.End, patch: ToJsonDocument(backwardPatch), patchingDirection: PatchingDirection.AntiparallelWithTime);
+            return backwardsTpr;
+        }).OrderBy(trp => trp.From).ToList();
         return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity, new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiparallelWithTime));
     }
 }

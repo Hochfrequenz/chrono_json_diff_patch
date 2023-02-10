@@ -52,6 +52,7 @@ public class TimeRangePatch : TimeRange
                 {
                     throw new ArgumentException($"{nameof(value)} ({value.Value:o}) must not be lower than {nameof(From)} ({From:o})");
                 }
+
                 End = value.Value.UtcDateTime;
             }
             else
@@ -71,11 +72,19 @@ public class TimeRangePatch : TimeRange
     [JsonProperty(PropertyName = "timestamp", Order = 13)]
     public DateTime? Timestamp { get; set; }
 
+    private readonly PatchingDirection _patchingDirection;
+    /// <summary>
+    /// Describes of this patch shall be applied "left to right" or "right to left".
+    /// For details see <see cref="PatchingDirection"/>
+    /// </summary>
+    public PatchingDirection PatchingDirection => _patchingDirection;
+
     /// <summary>
     /// empty constructor (required for JSON deserialization)
     /// </summary>
     public TimeRangePatch()
     {
+        _patchingDirection = PatchingDirection.ParallelWithTime;
     }
 
     /// <summary>
@@ -89,11 +98,12 @@ public class TimeRangePatch : TimeRange
     /// <summary>
     /// instantiate with given "from" date and open end
     /// </summary>
-    public TimeRangePatch(DateTimeOffset from, JsonDocument? patch, DateTimeOffset? to = null)
+    public TimeRangePatch(DateTimeOffset from, JsonDocument? patch, DateTimeOffset? to = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime)
     {
         To = to;
         From = from;
         Patch = patch;
+        _patchingDirection = patchingDirection;
     }
 
     /// <summary>

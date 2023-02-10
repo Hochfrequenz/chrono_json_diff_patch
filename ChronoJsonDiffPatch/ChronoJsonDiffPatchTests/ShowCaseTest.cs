@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
 using ChronoJsonDiffPatch;
 using FluentAssertions;
+using JsonDiffPatchDotNet;
+using Newtonsoft.Json.Linq;
 
 namespace ChronoJsonDiffPatchTests;
 
@@ -54,5 +56,21 @@ public class ShowCaseTest
         // same goes for barDate
         var stateAtBarDate = chain.PatchToDate(myEntityInitially, barDate);
         stateAtBarDate.MyProperty.Should().Be("bar");
+    }
+
+    [Fact]
+    public void TestBackwardsPatch()
+    {
+        var stateAfterPatchDate = new TimeRangePatchChainTests.DummyClass()
+        {
+            MyProperty = "Foo"
+        };
+        var stateBeforePatchDate = new TimeRangePatchChainTests.DummyClass()
+        {
+            MyProperty = "Bar"
+        };
+        var patch = new JsonDiffPatch();
+        var backwardPatch = patch.Patch(JToken.Parse(System.Text.Json.JsonSerializer.Serialize(stateAfterPatchDate)), JToken.Parse(System.Text.Json.JsonSerializer.Serialize(stateBeforePatchDate)));
+        backwardPatch.Should().NotBeNull();
     }
 }

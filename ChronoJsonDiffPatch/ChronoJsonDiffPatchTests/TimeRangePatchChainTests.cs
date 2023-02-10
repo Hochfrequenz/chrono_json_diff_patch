@@ -16,8 +16,10 @@ public class TimeRangePatchChainTests
     /// <summary>
     /// checks that the given <paramref name="chain"/> passes basic sanity checks
     /// </summary>
+    /// <param name="initialState"></param>
     /// <param name="chain"></param>
-    private static void AssertBasicSanity(DummyClass stateAtMinusInfinity, TimeRangePatchChain<DummyClass> chain)
+    /// <param name="checkReverseChain"></param>
+    private static void AssertBasicSanity(DummyClass initialState, TimeRangePatchChain<DummyClass> chain, bool checkReverseChain = true)
     {
         chain.HasStart.Should().BeFalse();
         chain.HasEnd.Should().BeFalse();
@@ -34,15 +36,39 @@ public class TimeRangePatchChainTests
             .And.AllSatisfy(p => p.Start.Day.Should().Be(1))
             .And.AllSatisfy(p => p.End.Day.Should().Be(1))
             .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
-            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc));
+            .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc))
+            .And.Subject.Cast<TimeRangePatch>().Should()
+            .AllSatisfy(p => p.PatchingDirection.Should().Be(chain.PatchingDirection));
 
         chain.Where(p => p.End != DateTime.MaxValue).Should()
             .AllSatisfy(p => chain.Any(q => q.Start == p.End).Should().BeTrue(), because: "The ends of all entries p shall be the start of another entry q");
         chain.Where(p => p.Start != DateTime.MinValue).Should()
             .AllSatisfy(p => chain.Any(q => q.End == p.Start).Should().BeTrue(), because: "The starts of all entries p shall be the end of another entry q");
+        if (!checkReverseChain)
+        {
+            return;
+        }
+        var (reversedInitialState, reversedChain) = chain.Reverse(initialEntity: initialState);
+        reversedChain.PatchingDirection.Should().NotBe(chain.PatchingDirection);
+        AssertBasicSanity(reversedInitialState, reversedChain, checkReverseChain = false);
+        foreach (var patchDate in chain.Select(p => p.Start))
+        {
+            var stateInForwardChain = chain.PatchToDate(initialState, patchDate);
+            var stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, patchDate);
+            stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {patchDate:O} should match");
+            if (patchDate != DateTimeOffset.MinValue.UtcDateTime)
+            {
+                var slightlyBeforePatchDate = patchDate - TimeSpan.FromTicks(1);
+                stateInForwardChain = chain.PatchToDate(initialState, slightlyBeforePatchDate);
+                stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, slightlyBeforePatchDate);
+                stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {slightlyBeforePatchDate:O} should match");
+            }
 
-        //var (stateAtPlusInfinity, reversedChain) = chain.Reverse(initialEntity: stateAtMinusInfinity);
-        //reversedChain.PatchingDirection.Should().NotBe(chain.PatchingDirection);
+            var slightlyAfterPatchDate = patchDate + TimeSpan.FromTicks(1);
+            stateInForwardChain = chain.PatchToDate(initialState, slightlyAfterPatchDate);
+            stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, slightlyAfterPatchDate);
+            stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {slightlyAfterPatchDate:O} should match");
+        }
     }
 
     [Fact]
@@ -385,6 +411,7 @@ public class TimeRangePatchChainTests
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
+        AssertBasicSanity(myEntity, trpCollection);
         Action addInThePastWithoutSpecifyingBehaviour;
         var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
