@@ -51,7 +51,7 @@ public enum PatchingDirection
     /// Although this doesn't feel as natural as <see cref="ParallelWithTime"/>, it might useful if you store changes to an entity in a database and you always want to have the most recent/youngest state as "full" entity and persist the past as patches.
     /// Then you always start with the youngest entity and patch "backwards" until you reach the point in time/in the past in which you're interested. 
     /// </remarks>
-    AntiparallelWithTime,
+    AntiParallelWithTime,
 }
 
 /// <summary>
@@ -166,7 +166,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         return PatchingDirection switch
         {
             PatchingDirection.ParallelWithTime => result.OrderBy(trp => trp.From).ThenBy(trp => trp.End),
-            PatchingDirection.AntiparallelWithTime => result.OrderByDescending(trp => trp.From).ThenByDescending(trp => trp.End),
+            PatchingDirection.AntiParallelWithTime => result.OrderByDescending(trp => trp.From).ThenByDescending(trp => trp.End),
             _ => throw new ArgumentOutOfRangeException()
         };
     }
@@ -213,7 +213,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             // the behaviour is undefined as of now
         }
 
-        if (PatchingDirection == PatchingDirection.AntiparallelWithTime)
+        if (PatchingDirection == PatchingDirection.AntiParallelWithTime)
         {
             throw new NotImplementedException($"Adding patches to a chain with {nameof(PatchingDirection)}=={PatchingDirection} is not implemented yet. Please reverse the chain and try again");
         }
@@ -409,7 +409,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
                     return _deserialize(JsonConvert.SerializeObject(left));
                 }
-            case PatchingDirection.AntiparallelWithTime:
+            case PatchingDirection.AntiParallelWithTime:
                 {
                     foreach (var existingPatch in GetAll()
                                  .Where(p => p.End > keyDate)
@@ -429,7 +429,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// This method returns a reversed chain for the same data.
     /// Reversing means, that the key date of the base entity (its initial state) switches its sign (+/- infinity).
     /// Also the patches are reversed such that they have to be read right to left instead of left to right or vice versa respectively.
-    /// Technically this changes the chains <see cref="PatchingDirection"/> from <see cref="ChronoJsonDiffPatch.PatchingDirection.ParallelWithTime"/> to <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiparallelWithTime"/> or vice versa
+    /// Technically this changes the chains <see cref="PatchingDirection"/> from <see cref="ChronoJsonDiffPatch.PatchingDirection.ParallelWithTime"/> to <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiParallelWithTime"/> or vice versa
     /// and also changes the <see cref="TimeRangePatch.PatchingDirection"/> of each patch in the chain.
     ///
     /// </summary>
@@ -438,9 +438,9 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// 
     /// 1) Assuming that this chain has <see cref="ChronoJsonDiffPatch.PatchingDirection.ParallelWithTime"/>, then, if you provide the state of the entity at -infinity (<paramref name="initialEntity"/>),
     /// this method returns a tuple of an <typeparamref name="TEntity"/> and a <see cref="TimeRangePatchChain{TEntity}"/> where the returned entity is the state of the entity at +infinity
-    /// and the returned chain has PatchingDirection <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiparallelWithTime"/>.
+    /// and the returned chain has PatchingDirection <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiParallelWithTime"/>.
     ///
-    /// 2) Assuming that this chain has <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiparallelWithTime"/>, then, if you provide the state of the entity at +infinity (<paramref name="initialEntity"/>),
+    /// 2) Assuming that this chain has <see cref="ChronoJsonDiffPatch.PatchingDirection.AntiParallelWithTime"/>, then, if you provide the state of the entity at +infinity (<paramref name="initialEntity"/>),
     /// this method returns a tuple of an <typeparamref name="TEntity"/> and a <see cref="TimeRangePatchChain{TEntity}"/> where the returned entity is the state of the entity at -infinity
     /// and the returned chain has PatchingDirection <see cref="ChronoJsonDiffPatch.PatchingDirection.ParallelWithTime"/>.
     ///
@@ -460,12 +460,12 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         var stateBeforePatchDate = PatchToDate(initialEntity, forwardPatch.End);
                         var backwardPatch = new JsonDiffPatch().Diff(ToJToken(stateAfterPatchDate), ToJToken(stateBeforePatchDate));
                         var backwardsTrp = new TimeRangePatch(from: forwardPatch.Start, to: forwardPatch.End, patch: ToJsonDocument(backwardPatch),
-                            patchingDirection: PatchingDirection.AntiparallelWithTime);
+                            patchingDirection: PatchingDirection.AntiParallelWithTime);
                         return backwardsTrp;
                     }).OrderBy(trp => trp.From).ToList();
-                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity, new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiparallelWithTime));
+                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity, new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiParallelWithTime));
                 }
-            case PatchingDirection.AntiparallelWithTime:
+            case PatchingDirection.AntiParallelWithTime:
                 {
                     var stateAtMinusInfinity = PatchToDate(initialEntity, DateTimeOffset.MinValue);
                     List<TimeRangePatch> forwardPatches = GetAll().OrderBy(trp => trp.Start).Select(backwardsPatch =>
