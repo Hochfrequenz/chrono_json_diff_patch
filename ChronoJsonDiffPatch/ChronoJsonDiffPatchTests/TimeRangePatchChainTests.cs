@@ -17,9 +17,13 @@ public class TimeRangePatchChainTests
     /// </summary>
     /// <param name="initialState"></param>
     /// <param name="chain"></param>
-    /// <param name="checkReverseChain"></param>
-    private static void AssertBasicSanity(DummyClass initialState, TimeRangePatchChain<DummyClass> chain, bool checkReverseChain = true)
+    /// <param name="numberOfReverseChecks">how often should the chain be reversed and checked again for consistency? Any number &gt; 2 is not meaningful</param>
+    private static void AssertBasicSanity(DummyClass initialState, TimeRangePatchChain<DummyClass> chain, int numberOfReverseChecks = 2)
     {
+        if (numberOfReverseChecks is < 0 or > 4)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numberOfReverseChecks), $"should be between 0 <= {nameof(numberOfReverseChecks)} <= 4");
+        }
         chain.HasStart.Should().BeFalse();
         chain.HasEnd.Should().BeFalse();
 
@@ -28,6 +32,7 @@ public class TimeRangePatchChainTests
         chain.Last.End.Should().Be(DateTimeOffset.MaxValue.UtcDateTime);
         chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
 
+        // please don't ever add 23:59:59 or alike.
         chain.Where(p => p.End != DateTime.MaxValue).Should()
             .AllSatisfy(p => p.End.Second.Should().Be(0), because: "in our tests we only use second 0")
             .And.AllSatisfy(p => p.End.Minute.Should().Be(0), because: "in our tests we only use minute 0")
@@ -42,13 +47,13 @@ public class TimeRangePatchChainTests
             .AllSatisfy(p => chain.Any(q => q.Start == p.End).Should().BeTrue(), because: "The ends of all entries p shall be the start of another entry q");
         chain.Where(p => p.Start != DateTime.MinValue).Should()
             .AllSatisfy(p => chain.Any(q => q.End == p.Start).Should().BeTrue(), because: "The starts of all entries p shall be the end of another entry q");
-        if (!checkReverseChain)
+        if (numberOfReverseChecks == 0)
         {
             return;
         }
         var (reversedInitialState, reversedChain) = chain.Reverse(initialEntity: initialState);
         reversedChain.PatchingDirection.Should().NotBe(chain.PatchingDirection);
-        AssertBasicSanity(reversedInitialState, reversedChain, checkReverseChain = false);
+        AssertBasicSanity(reversedInitialState, reversedChain, numberOfReverseChecks = numberOfReverseChecks - 1);
         foreach (var patchDate in chain.Select(p => p.Start))
         {
             var stateInForwardChain = chain.PatchToDate(initialState, patchDate);
@@ -67,6 +72,10 @@ public class TimeRangePatchChainTests
             stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, slightlyAfterPatchDate);
             stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {slightlyAfterPatchDate:O} should match");
         }
+
+        var reversedChainDirection = reversedChain.PatchingDirection;
+        var copiedReversedChain = new TimeRangePatchChain<DummyClass>(reversedChain.GetAll(),reversedChainDirection);
+        copiedReversedChain.Should().BeEquivalentTo(reversedChain);
     }
 
     [Fact]

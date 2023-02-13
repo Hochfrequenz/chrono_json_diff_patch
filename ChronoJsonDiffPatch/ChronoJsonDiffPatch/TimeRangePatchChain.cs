@@ -112,6 +112,20 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     public PatchingDirection PatchingDirection { get; private set; }
 
     /// <summary>
+    /// prepare the given (optional) time periods to forward them to the base constructor
+    /// </summary>
+    /// <param name="timeperiods"></param>
+    /// <returns></returns>
+    private static IEnumerable<TimeRangePatch> PrepareForTimePeriodChainConstructor(IEnumerable<TimeRangePatch>? timeperiods)
+    {
+        if (timeperiods is null)
+        {
+            return new List<TimeRangePatch>();
+        }
+        return timeperiods.OrderBy(tp=>tp.Start);
+    }
+
+    /// <summary>
     /// initialize the collection by providing a list of time periods
     /// </summary>
     /// <param name="timeperiods"></param>
@@ -119,7 +133,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
     public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
-        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(timeperiods ?? new List<TimeRangePatch> { })
+        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base( PrepareForTimePeriodChainConstructor( timeperiods ))
     {
         _serialize = serializer ?? DefaultSerializer;
         _deserialize = deserializer ?? DefaultDeSerializer;
