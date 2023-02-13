@@ -122,7 +122,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             return new List<TimeRangePatch>();
         }
-        return timeperiods.OrderBy(tp=>tp.Start);
+        return timeperiods.OrderBy(tp => tp.Start);
     }
 
     /// <summary>
@@ -133,7 +133,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
     public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
-        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base( PrepareForTimePeriodChainConstructor( timeperiods ))
+        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(PrepareForTimePeriodChainConstructor(timeperiods))
     {
         _serialize = serializer ?? DefaultSerializer;
         _deserialize = deserializer ?? DefaultDeSerializer;

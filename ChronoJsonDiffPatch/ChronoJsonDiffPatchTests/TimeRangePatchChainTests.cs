@@ -74,7 +74,7 @@ public class TimeRangePatchChainTests
         }
 
         var reversedChainDirection = reversedChain.PatchingDirection;
-        var copiedReversedChain = new TimeRangePatchChain<DummyClass>(reversedChain.GetAll(),reversedChainDirection);
+        var copiedReversedChain = new TimeRangePatchChain<DummyClass>(reversedChain.GetAll(), reversedChainDirection);
         copiedReversedChain.Should().BeEquivalentTo(reversedChain);
     }
 
