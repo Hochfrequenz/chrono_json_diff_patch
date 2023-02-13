@@ -173,7 +173,7 @@ public class TimeRangePatchChainTests
 
         var (entityAtEndOfTime, reversedChain) = trpCollection.Reverse(myEntity);
         entityAtEndOfTime.Should().BeEquivalentTo(actualB);
-        reversedChain.PatchingDirection.Should().Be(PatchingDirection.AntiparallelWithTime);
+        reversedChain.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime);
 
     }
 
@@ -405,7 +405,7 @@ public class TimeRangePatchChainTests
     [Fact]
     public void Test_Patching_Backwards()
     {
-        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiparallelWithTime);
+        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiParallelWithTime);
         var myEntity = new DummyClass
         {
             MyProperty = "foo" // start with foo at +infinity
