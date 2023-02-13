@@ -213,6 +213,11 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             // the behaviour is undefined as of now
         }
 
+        if (PatchingDirection == PatchingDirection.AntiparallelWithTime)
+        {
+            throw new NotImplementedException($"Adding patches to a chain with {nameof(PatchingDirection)}=={PatchingDirection} is not implemented yet. Please reverse the chain and try again");
+        }
+
         var jdp = new JsonDiffPatch();
         JToken patchAtKeyDate;
         var changedToken = ToJToken(changedEntity);

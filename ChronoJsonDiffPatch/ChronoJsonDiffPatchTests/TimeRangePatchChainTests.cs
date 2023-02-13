@@ -405,29 +405,29 @@ public class TimeRangePatchChainTests
     [Fact]
     public void Test_Patching_Backwards()
     {
-        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection:PatchingDirection.AntiparallelWithTime);
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo" // start with foo at +infinity
         };
         var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        Action addAction;
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to bar at keydate B
+                MyProperty = "bar" // before the keydate B the value was bar
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDateB);
+            addAction = ()=>trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
+        addAction.Should().Throw<NotImplementedException>();
+        /*
+        var stateAtKeydateB = trpCollection.PatchToDate(myEntity, keyDateB);
+        stateAtKeydateB.MyProperty.Should().Be("foo");
+        var stateAfterKeydateB = trpCollection.PatchToDate(myEntity, keyDateB + TimeSpan.FromTicks(1));
+        stateAfterKeydateB.MyProperty.Should().Be("foo");
+        var stateBeforeKeyDateB = trpCollection.PatchToDate(myEntity, keyDateB - TimeSpan.FromTicks(1));
+        stateBeforeKeyDateB.MyProperty.Should().Be("bar");
         AssertBasicSanity(myEntity, trpCollection);
-        Action addInThePastWithoutSpecifyingBehaviour;
-        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        {
-            var myAnotherEntity = new DummyClass
-            {
-                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
-            };
-            addInThePastWithoutSpecifyingBehaviour = () => trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
-        }
-        addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
+        */
     }
 }
