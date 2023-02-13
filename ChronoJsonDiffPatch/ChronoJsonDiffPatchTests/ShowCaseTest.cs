@@ -11,6 +11,7 @@ public class ShowCaseTest
         [JsonPropertyName("myProperty")]
         public string MyProperty { get; set; }
     }
+
     /// <summary>
     /// Apply to patches, in ascending order
     /// </summary>
