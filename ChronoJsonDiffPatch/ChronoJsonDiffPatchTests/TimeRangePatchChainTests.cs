@@ -405,7 +405,7 @@ public class TimeRangePatchChainTests
     [Fact]
     public void Test_Patching_Backwards()
     {
-        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection:PatchingDirection.AntiparallelWithTime);
+        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiparallelWithTime);
         var myEntity = new DummyClass
         {
             MyProperty = "foo" // start with foo at +infinity
@@ -417,7 +417,7 @@ public class TimeRangePatchChainTests
             {
                 MyProperty = "bar" // before the keydate B the value was bar
             };
-            addAction = ()=>trpCollection.Add(myEntity, myChangedEntity, keyDateB);
+            addAction = () => trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
         addAction.Should().Throw<NotImplementedException>();
         /*
