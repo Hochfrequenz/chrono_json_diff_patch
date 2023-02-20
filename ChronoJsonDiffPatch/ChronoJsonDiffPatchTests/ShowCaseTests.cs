@@ -4,7 +4,7 @@ using FluentAssertions;
 
 namespace ChronoJsonDiffPatchTests;
 
-public class ShowCaseTest
+public class ShowCaseTests
 {
     class MyEntity
     {
@@ -55,5 +55,11 @@ public class ShowCaseTest
         // same goes for barDate
         var stateAtBarDate = chain.PatchToDate(myEntityInitially, barDate);
         stateAtBarDate.MyProperty.Should().Be("bar");
+
+        // you can reverse any chain
+        var (stateAtPlusInfinity, reverseChain) = chain.Reverse(myEntityInitially);
+        reverseChain.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime);
+        stateAtPlusInfinity.MyProperty.Should().Be("bar");
+        reverseChain.GetAll().Should().AllSatisfy(p => p.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime));
     }
 }
