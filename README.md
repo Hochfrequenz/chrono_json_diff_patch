@@ -78,7 +78,7 @@ var stateAtBarDate = chain.PatchToDate(myEntityInitially, barDate);
 stateAtBarDate.MyProperty.Should().Be("bar");
 ```
 
-Find the full example in [`ShowCaseTest.cs`](ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/ShowCaseTest.cs).
+Find the full example in [`ShowCaseTests.cs`](ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/ShowCaseTests.cs).
 
 Internally the chain only saves the differential changes/JsonDiffPatches at the given dates:
 
@@ -87,6 +87,24 @@ Internally the chain only saves the differential changes/JsonDiffPatches at the 
 | 0     | `DateTime.MinValue` | `fooDate`           | `null`                             |
 | 1     | `fooDate`           | `barDate`           | `{"myProperty":["initial","foo"]}` |
 | 2     | `barDate`           | `DateTime.MaxValue` | `{"myProperty":["foo","bar"]}`     |
+
+### Patching Anti Parallel with Time
+You can also model the entity such that the "base" of the patches is not the state at `DateTime.MinValue` but at `DateTime.MaxValue` and the patches model the differential changes from a future date towards the past.
+```c#
+var (stateAtPlusInfinity, reverseChain) = chain.Reverse(myEntityInitially);
+reverseChain.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime);
+stateAtPlusInfinity.MyProperty.Should().Be("bar");
+reverseChain.GetAll().Should().AllSatisfy(p => p.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime));
+```
+
+The patches then look like this:
+
+| Index | Start               | End                 | JsonDiffPatch                      |
+| ----- |---------------------|---------------------|------------------------------------|
+| 0     | `barDate`           | `DateTime.MaxValue` | `null`                             |
+| 1     | `fooDate`           | `barDate`           | `{"myProperty":["foo","bar"]}`     |
+| 2     | `DateTime.MinValue` | `fooDate`           | `{"myProperty":["initial","foo"]}` |
+
 
 ## Code Quality / Production Readiness
 

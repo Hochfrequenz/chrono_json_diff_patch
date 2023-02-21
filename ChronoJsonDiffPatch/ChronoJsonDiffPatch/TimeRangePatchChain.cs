@@ -74,6 +74,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             return new List<TimeRangePatch>();
         }
+
         return timeperiods.OrderBy(tp => tp.Start);
     }
 
@@ -113,8 +114,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
         if (distinctPatchingDirections.Count() == 1 && distinctPatchingDirections.Single().PatchingDirection != PatchingDirection)
         {
-            throw new InvalidDataException($"The chain is inconsistent: The chain patching direction {PatchingDirection} differs from the chains single elements directions {distinctPatchingDirections.Single().PatchingDirection}");
+            throw new InvalidDataException(
+                $"The chain is inconsistent: The chain patching direction {PatchingDirection} differs from the chains single elements directions {distinctPatchingDirections.Single().PatchingDirection}");
         }
+
         return PatchingDirection switch
         {
             PatchingDirection.ParallelWithTime => result.OrderBy(trp => trp.From).ThenBy(trp => trp.End),
@@ -159,15 +162,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <exception cref="NotImplementedException"></exception>
     public void Add(TEntity initialEntity, TEntity changedEntity, DateTimeOffset moment, FuturePatchBehaviour? futurePatchBehaviour = null)
     {
-        if (Contains(moment))
-        {
-            throw new ArgumentException("You must not add a patch at a date for which there is already a patch");
-            // the behaviour is undefined as of now
-        }
-
         if (PatchingDirection == PatchingDirection.AntiParallelWithTime)
         {
-            throw new NotImplementedException($"Adding patches to a chain with {nameof(PatchingDirection)}=={PatchingDirection} is not implemented yet. Please reverse the chain and try again");
+            throw new NotImplementedException(
+                $"Adding patches to a chain with {nameof(PatchingDirection)}=={PatchingDirection} is not implemented yet. Please reverse the chain and try again");
         }
 
         var jdp = new JsonDiffPatch();
@@ -222,101 +220,123 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             ((TimeRangePatch)Last).ShrinkEndTo(patchToBeAdded.Start);
             Add(patchToBeAdded);
         }
+
+        foreach (var inifinitlyNarrowPatch in GetAll().Where(trp => trp.IsMoment))
+        {
+            Remove(inifinitlyNarrowPatch);
+        }
     }
 
     private void AddAndKeepTheFuture(TEntity initialEntity, TimeRangePatch patchToBeAdded, JToken changedToken, DateTimeOffset moment)
     {
-        var indexAtWhichThePatchShallBeAdded = IndexOf(GetAll().Last(trp => trp.Start.ToUniversalTime() <= moment.UtcDateTime)) + 1;
-
-
-        // We shrink the patch to be added such that it does not overwrite existing future patches ("Keep the Future").
-        // So we make it end where the next patch starts.
-        var firstExistingOverlappingPatch = GetAll().First(trp => trp.Start > patchToBeAdded.Start);
-        var intersection = firstExistingOverlappingPatch.GetIntersection(patchToBeAdded);
-        patchToBeAdded.ShrinkEndTo(new DateTimeOffset(intersection.Start).UtcDateTime);
-
-        //we need to modify the existing patch itself because its predecessor changed
-        var tokenAtIntersectionStart = ToJToken(PatchToDate(initialEntity, intersection.Start.ToUniversalTime()));
-        var updatedPatch = new JsonDiffPatch().Diff(changedToken, tokenAtIntersectionStart);
-        firstExistingOverlappingPatch.Patch = ToJsonDocument(updatedPatch);
-
-        var subtractor = new TimePeriodSubtractor<TimeRangePatch>();
-        ITimePeriodCollection existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded =
-            subtractor.SubtractPeriods(this, new TimePeriodCollection { patchToBeAdded });
-        if (existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Count == Count)
+        if (Contains(moment))
         {
-            var n = -1;
-            foreach (var item in existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded)
+            var entryWhosePatchShouldBeReplaced = GetAll().First(trp => trp.Start >= moment.UtcDateTime);
+            entryWhosePatchShouldBeReplaced.Patch = patchToBeAdded.Patch;
+            // we also need to modify the following entry.
+            // If the original patches are [A,B],[B,C],[C,D] and we replace B with X, then we not only have to replace [A,B] with [A,X] (which we already did in the entryWhosePatchShouldBeReplaced)
+            // but also replace [B,C] with [X,C].
+            if (GetAll().SingleOrDefault(trp => trp.Start == entryWhosePatchShouldBeReplaced.End) is { } followingEntry)
             {
-                n += 1;
-                ((TimeRangePatch)this[n])
-                    .ShrinkTo(item); // shrink them all such there is exactly patchToBeAdded.Duration space left (somewhere in the middle)
+                //followingEntry.Patch = 
+                var tokenBeginningOfNextSlice = ToJToken(PatchToDate(initialEntity, followingEntry.Start.ToUniversalTime()));
+                var updatedFollowingPatch = new JsonDiffPatch().Diff(changedToken, tokenBeginningOfNextSlice);
+                followingEntry.Patch = ToJsonDocument(updatedFollowingPatch);
             }
         }
         else
         {
-            var itemsLeftOfTheGap = existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
-            bool anythingHasBeenShrunk = false;
-            foreach (var itemLeftOfTheGap in itemsLeftOfTheGap)
+            var indexAtWhichThePatchShallBeAdded = IndexOf(GetAll().Last(trp => trp.Start.ToUniversalTime() <= moment.UtcDateTime)) + 1;
+
+            // We shrink the patch to be added such that it does not overwrite existing future patches ("Keep the Future").
+            // So we make it end where the next patch starts.
+            var firstExistingOverlappingPatch = GetAll().First(trp => trp.Start > patchToBeAdded.Start);
+            var intersection = firstExistingOverlappingPatch.GetIntersection(patchToBeAdded);
+            patchToBeAdded.ShrinkEndTo(new DateTimeOffset(intersection.Start).UtcDateTime);
+
+            //we need to modify the existing patch itself because its predecessor changed
+            var tokenAtIntersectionStart = ToJToken(PatchToDate(initialEntity, intersection.Start.ToUniversalTime()));
+            var updatedPatch = new JsonDiffPatch().Diff(changedToken, tokenAtIntersectionStart);
+            firstExistingOverlappingPatch.Patch = ToJsonDocument(updatedPatch);
+
+            var subtractor = new TimePeriodSubtractor<TimeRangePatch>();
+            ITimePeriodCollection existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded =
+                subtractor.SubtractPeriods(this, new TimePeriodCollection { patchToBeAdded });
+            if (existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Count == Count)
             {
-                if (GetAll().SingleOrDefault(p => p.Start == itemLeftOfTheGap.Start && p.End >= itemLeftOfTheGap.End) is { } aPatch)
+                var n = -1;
+                foreach (var item in existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded)
                 {
-                    aPatch.ShrinkTo(itemLeftOfTheGap);
-                    anythingHasBeenShrunk = true;
+                    n += 1;
+                    ((TimeRangePatch)this[n])
+                        .ShrinkTo(item); // shrink them all such there is exactly patchToBeAdded.Duration space left (somewhere in the middle)
                 }
-            }
-
-            if (!anythingHasBeenShrunk)
-            {
-                GetAll().Last(p => p.Start < patchToBeAdded.Start)
-                    .ShrinkEndTo(itemsLeftOfTheGap.First(p => p.End >= patchToBeAdded.Start).End);
-            }
-        }
-
-        var thoseItemsAfterTheGap = GetAll().Where(s => s.Start > patchToBeAdded.Start);
-        foreach (var itemAfterGap in thoseItemsAfterTheGap)
-        {
-            itemAfterGap.Move(-patchToBeAdded.Duration);
-        }
-
-
-        bool startHasToBeShifted = indexAtWhichThePatchShallBeAdded < Count - 1 && !HasStart; // this triggers the CheckSpaceBefore() check
-        if (startHasToBeShifted)
-        {
-            ((TimeRangePatch)First).ShrinkStartTo((DateTimeOffset.MinValue + patchToBeAdded.Duration).UtcDateTime);
-        }
-
-        Insert(indexAtWhichThePatchShallBeAdded, patchToBeAdded);
-        if (startHasToBeShifted)
-        {
-            // don't ask. it passes the tests. that's all I wished for today
-            var itemsLeftOfTheAddedPatch = this.Where(p => p.Start < patchToBeAdded.Start && p.End != patchToBeAdded.Start).Cast<TimeRangePatch>();
-            foreach (var itemLeftOfTheAddedPatch in itemsLeftOfTheAddedPatch)
-            {
-                // OK... someone explain me this behaviour:
-                // If, before the insert, I move the items _after_ the keydate to the left,
-                // then, after the insert I have to move items _before_ the keydate to the right.
-                // I think this line just fixes symptoms. The causes are elsewhere.
-                // this is purely testdriven... maybe tobias is right and we should just write the timeperiod code by ourselfs ;)
-                if (itemLeftOfTheAddedPatch.Start != DateTimeOffset.MinValue.UtcDateTime &&
-                    itemLeftOfTheAddedPatch.Start - patchToBeAdded.Duration == DateTimeOffset.MinValue.UtcDateTime)
-                {
-                    itemLeftOfTheAddedPatch.Move(-patchToBeAdded.Duration);
-                }
-                else
-                {
-                    itemLeftOfTheAddedPatch.Move(patchToBeAdded.Duration);
-                }
-            }
-
-            if (HasStart)
-            {
-                ((TimeRangePatch)First).ExpandStartTo(DateTimeOffset.MinValue.UtcDateTime);
             }
             else
             {
-                ((TimeRangePatch)First).ExpandEndTo(First.End + patchToBeAdded.Duration);
-                ((TimeRange)this[1]).ShrinkStartTo(First.End);
+                var itemsLeftOfTheGap = existingPatchesWithoutTheRangeCoveredByThePatchToBeAdded.Where(p => p.Start < patchToBeAdded.Start);
+                bool anythingHasBeenShrunk = false;
+                foreach (var itemLeftOfTheGap in itemsLeftOfTheGap)
+                {
+                    if (GetAll().SingleOrDefault(p => p.Start == itemLeftOfTheGap.Start && p.End >= itemLeftOfTheGap.End) is { } aPatch)
+                    {
+                        aPatch.ShrinkTo(itemLeftOfTheGap);
+                        anythingHasBeenShrunk = true;
+                    }
+                }
+
+                if (!anythingHasBeenShrunk)
+                {
+                    GetAll().Last(p => p.Start < patchToBeAdded.Start)
+                        .ShrinkEndTo(itemsLeftOfTheGap.First(p => p.End >= patchToBeAdded.Start).End);
+                }
+            }
+
+            var thoseItemsAfterTheGap = GetAll().Where(s => s.Start > patchToBeAdded.Start);
+            foreach (var itemAfterGap in thoseItemsAfterTheGap)
+            {
+                itemAfterGap.Move(-patchToBeAdded.Duration);
+            }
+
+
+            bool startHasToBeShifted = indexAtWhichThePatchShallBeAdded < Count - 1 && !HasStart; // this triggers the CheckSpaceBefore() check
+            if (startHasToBeShifted)
+            {
+                ((TimeRangePatch)First).ShrinkStartTo((DateTimeOffset.MinValue + patchToBeAdded.Duration).UtcDateTime);
+            }
+
+            Insert(indexAtWhichThePatchShallBeAdded, patchToBeAdded);
+            if (startHasToBeShifted)
+            {
+                // don't ask. it passes the tests. that's all I wished for today
+                var itemsLeftOfTheAddedPatch = this.Where(p => p.Start < patchToBeAdded.Start && p.End != patchToBeAdded.Start).Cast<TimeRangePatch>();
+                foreach (var itemLeftOfTheAddedPatch in itemsLeftOfTheAddedPatch)
+                {
+                    // OK... someone explain me this behaviour:
+                    // If, before the insert, I move the items _after_ the keydate to the left,
+                    // then, after the insert I have to move items _before_ the keydate to the right.
+                    // I think this line just fixes symptoms. The causes are elsewhere.
+                    // this is purely testdriven... maybe tobias is right and we should just write the timeperiod code by ourselfs ;)
+                    if (itemLeftOfTheAddedPatch.Start != DateTimeOffset.MinValue.UtcDateTime &&
+                        itemLeftOfTheAddedPatch.Start - patchToBeAdded.Duration == DateTimeOffset.MinValue.UtcDateTime)
+                    {
+                        itemLeftOfTheAddedPatch.Move(-patchToBeAdded.Duration);
+                    }
+                    else
+                    {
+                        itemLeftOfTheAddedPatch.Move(patchToBeAdded.Duration);
+                    }
+                }
+
+                if (HasStart)
+                {
+                    ((TimeRangePatch)First).ExpandStartTo(DateTimeOffset.MinValue.UtcDateTime);
+                }
+                else
+                {
+                    ((TimeRangePatch)First).ExpandEndTo(First.End + patchToBeAdded.Duration);
+                    ((TimeRange)this[1]).ShrinkStartTo(First.End);
+                }
             }
         }
     }
@@ -328,9 +348,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             RemoveAt(futureIndex);
         }
-
-        var lastOverlappingPatchWhichIsNotDeleted = GetAll().Last(p => p.OverlapsWith(patchToBeAdded));
-        lastOverlappingPatchWhichIsNotDeleted.ShrinkEndTo(patchToBeAdded.Start);
+        if (GetAll().LastOrDefault(p => p.OverlapsWith(patchToBeAdded)) is { } lastOverlappingPatchWhichIsNotDeleted)
+        {
+            lastOverlappingPatchWhichIsNotDeleted.ShrinkEndTo(patchToBeAdded.Start);
+        }
         Add(patchToBeAdded);
     }
 
@@ -370,6 +391,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
                         left = jdp.Unpatch(left, jtokenPatch);
                     }
+
                     return _deserialize(JsonConvert.SerializeObject(left));
                 }
             default:
@@ -415,7 +437,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             patchingDirection: PatchingDirection.AntiParallelWithTime);
                         return backwardsTrp;
                     }).OrderBy(trp => trp.From).ToList();
-                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity, new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiParallelWithTime));
+                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity,
+                        new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiParallelWithTime));
                 }
             case PatchingDirection.AntiParallelWithTime:
                 {

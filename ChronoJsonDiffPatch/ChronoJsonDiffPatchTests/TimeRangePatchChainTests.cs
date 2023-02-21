@@ -174,7 +174,141 @@ public class TimeRangePatchChainTests
         var (entityAtEndOfTime, reversedChain) = trpCollection.Reverse(myEntity);
         entityAtEndOfTime.Should().BeEquivalentTo(actualB);
         reversedChain.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime);
+    }
 
+    /// <summary>
+    /// Apply to patches, in ascending order, replace the last one with a second patch
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_Sequentially_with_the_last_one_being_at_the_same_date()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar" // switch to bar at keydate A
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA);
+        }
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "old-baz1" // switch to baz at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
+        }
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "new-baz" // switch to new-baz, also at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
+        }
+        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be("foo");
+
+        var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
+        actualA.MyProperty.Should().Be("bar");
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("new-baz");
+
+        AssertBasicSanity(myEntity, trpCollection);
+    }
+
+    /// <summary>
+    /// Apply to patches, in ascending order, replace the second one with a second patch
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_Sequentially_with_middle_last_one_being_at_the_same_date_keep_the_future()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar1" // switch to bar1 at keydate A
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA);
+        }
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to baz at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
+        }
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar2" // now switch to bar2 at keydate A and overwrite the existing bar1 without loosing the following baz
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA, FuturePatchBehaviour.KeepTheFuture);
+        }
+
+        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be("foo");
+        var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
+        actualA.MyProperty.Should().Be("bar2");
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("baz");
+
+        AssertBasicSanity(myEntity, trpCollection);
+    }
+
+    /// <summary>
+    /// Apply to patches, in ascending order, replace the second one with a second patch
+    /// </summary>
+    [Fact]
+    public void Test_Three_Patches_Sequentially_with_middle_last_one_being_at_the_same_date_overwrite_the_future()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass
+        {
+            MyProperty = "foo" // start with foo
+        };
+        var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar1" // switch to bar1 at keydate A
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA);
+        }
+        var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myAnotherEntity = new DummyClass
+            {
+                MyProperty = "baz" // switch to baz at keydate B
+            };
+            trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
+        }
+        {
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "bar2" // now switch to bar2 at keydate A and overwrite the existing bar1; discard the future
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDateA, FuturePatchBehaviour.OverwriteTheFuture);
+        }
+
+        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        actualBeforePatch.MyProperty.Should().Be("foo");
+        var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
+        actualA.MyProperty.Should().Be("bar2");
+        var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
+        actualB.MyProperty.Should().Be("bar2");
+
+        AssertBasicSanity(myEntity, trpCollection);
     }
 
     /// <summary>
