@@ -221,9 +221,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             Add(patchToBeAdded);
         }
 
-        foreach (var inifinitlyNarrowPatch in GetAll().Where(trp => trp.IsMoment))
+        foreach (var infinitelyNarrowPatch in GetAll().Where(trp => trp.IsMoment))
         {
-            Remove(inifinitlyNarrowPatch);
+            if (GetAll().Any(trp => trp.End == infinitelyNarrowPatch.Start && !trp.IsMoment)) // join the patch which is going to be deleted with another patch if it exists
+            {
+                var artificialChainWithoutTheRecentlyAddedPatch = new TimeRangePatchChain<TEntity>(GetAll().Where(p => !p.Equals(patchToBeAdded)));
+                var stateWithoutMomentPatch = artificialChainWithoutTheRecentlyAddedPatch.PatchToDate(initialEntity, infinitelyNarrowPatch.Start);
+                var jsonStateWithoutMomentPatch = ToJToken(stateWithoutMomentPatch);
+                var jdpDelta = new JsonDiffPatch();
+                var jsonStateWithMomentPatch = jdpDelta.Patch(jsonStateWithoutMomentPatch, JsonConvert.DeserializeObject<JToken>(patchToBeAdded.Patch!.RootElement.GetRawText()));
+                var jsonStateBeforeMomentPatch = ToJToken(artificialChainWithoutTheRecentlyAddedPatch.PatchToDate(initialEntity, infinitelyNarrowPatch.Start - TimeSpan.FromTicks(1)));
+                var jdpDelta2 = new JsonDiffPatch();
+                var result = jdpDelta2.Diff(jsonStateBeforeMomentPatch, jsonStateWithMomentPatch);
+                patchToBeAdded.Patch = ToJsonDocument(result);
+            }
+            Remove(infinitelyNarrowPatch);
         }
     }
 

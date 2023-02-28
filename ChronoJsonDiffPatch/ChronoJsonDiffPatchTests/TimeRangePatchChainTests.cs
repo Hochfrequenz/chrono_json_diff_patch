@@ -12,13 +12,21 @@ public class TimeRangePatchChainTests
         public string MyProperty { get; set; }
     }
 
+    internal class DummyClassWithTwoProperties
+    {
+        [JsonPropertyName("myPropertyA")]
+        public string MyPropertyA { get; set; }
+        [JsonPropertyName("myPropertyB")]
+        public string MyPropertyB { get; set; }
+    }
+
     /// <summary>
     /// checks that the given <paramref name="chain"/> passes basic sanity checks
     /// </summary>
     /// <param name="initialState"></param>
     /// <param name="chain"></param>
     /// <param name="numberOfReverseChecks">how often should the chain be reversed and checked again for consistency? Any number &gt; 2 is not meaningful</param>
-    private static void AssertBasicSanity(DummyClass initialState, TimeRangePatchChain<DummyClass> chain, int numberOfReverseChecks = 2)
+    private static void AssertBasicSanity<TBaseClass>(TBaseClass initialState, TimeRangePatchChain<TBaseClass> chain, int numberOfReverseChecks = 2)
     {
         if (numberOfReverseChecks is < 0 or > 4)
         {
@@ -534,6 +542,42 @@ public class TimeRangePatchChainTests
             addInThePastWithoutSpecifyingBehaviour = () => trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
         }
         addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Test_Patching_On_Same_Date()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
+        var myEntity = new DummyClassWithTwoProperties
+        {
+            MyPropertyA = "A0",
+            MyPropertyB = "B0",
+        };
+        var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A1",
+                MyPropertyB = "B1"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1);
+        }
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A1",// A stays at A1
+                MyPropertyB = "B2" // but B changes to B2
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+        }
+        AssertBasicSanity(myEntity, trpCollection);
+        var entityAtKeyDate0 = trpCollection.PatchToDate(myEntity, DateTimeOffset.MinValue);
+        entityAtKeyDate0.MyPropertyA.Should().Be("A0");
+        entityAtKeyDate0.MyPropertyB.Should().Be("B0");
+
+        var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1.MyPropertyA.Should().Be("A1");
+        entityAtKeyDate1.MyPropertyB.Should().Be("B2");
     }
 
     [Fact]
