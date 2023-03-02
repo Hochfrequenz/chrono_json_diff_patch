@@ -601,6 +601,15 @@ public class TimeRangePatchChainTests
         var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
         entityAtKeyDate1.MyPropertyA.Should().Be("A1");
         entityAtKeyDate1.MyPropertyB.Should().Be("B1");
+        var keydate0b = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A0.5",
+                MyPropertyB = "B0.5"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keydate0b, FuturePatchBehaviour.KeepTheFuture);
+        }
         var keyDate3 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
@@ -623,6 +632,10 @@ public class TimeRangePatchChainTests
         var entityAtKeyDate0 = trpCollection.PatchToDate(myEntity, DateTimeOffset.MinValue);
         entityAtKeyDate0.MyPropertyA.Should().Be("A0");
         entityAtKeyDate0.MyPropertyB.Should().Be("B0");
+
+        var entityAtKeyDate05 = trpCollection.PatchToDate(myEntity, keydate0b);
+        entityAtKeyDate05.MyPropertyA.Should().Be("A0.5");
+        entityAtKeyDate05.MyPropertyB.Should().Be("B0.5");
 
         entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
         entityAtKeyDate1.MyPropertyA.Should().Be("A1");
