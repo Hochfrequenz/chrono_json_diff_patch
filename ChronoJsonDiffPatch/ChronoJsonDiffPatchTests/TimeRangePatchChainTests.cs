@@ -581,6 +581,72 @@ public class TimeRangePatchChainTests
     }
 
     [Fact]
+    public void Test_Patching_On_Same_Date_In_The_Past()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
+        var myEntity = new DummyClassWithTwoProperties
+        {
+            MyPropertyA = "A0",
+            MyPropertyB = "B0",
+        };
+        var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A1",
+                MyPropertyB = "B1"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1);
+        }
+        var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1.MyPropertyA.Should().Be("A1");
+        entityAtKeyDate1.MyPropertyB.Should().Be("B1");
+        var keydate0b = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A0.5",
+                MyPropertyB = "B0.5"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keydate0b, FuturePatchBehaviour.KeepTheFuture);
+        }
+        var keyDate3 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A3",
+                MyPropertyB = "B3"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate3, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+        }
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A1", // at keydate1 a stays A1
+                MyPropertyB = "B2" // but we switch property B to B2
+            };
+            // note that in this test there is already a later patch after keydate1
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1, FuturePatchBehaviour.KeepTheFuture);
+        }
+        AssertBasicSanity(myEntity, trpCollection);
+        var entityAtKeyDate0 = trpCollection.PatchToDate(myEntity, DateTimeOffset.MinValue);
+        entityAtKeyDate0.MyPropertyA.Should().Be("A0");
+        entityAtKeyDate0.MyPropertyB.Should().Be("B0");
+
+        var entityAtKeyDate05 = trpCollection.PatchToDate(myEntity, keydate0b);
+        entityAtKeyDate05.MyPropertyA.Should().Be("A0.5");
+        entityAtKeyDate05.MyPropertyB.Should().Be("B0.5");
+
+        entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1.MyPropertyA.Should().Be("A1");
+        entityAtKeyDate1.MyPropertyB.Should().Be("B2");
+
+        var entityAtKeyDate3 = trpCollection.PatchToDate(myEntity, keyDate3);
+        entityAtKeyDate3.MyPropertyA.Should().Be("A3");
+        entityAtKeyDate3.MyPropertyB.Should().Be("B3");
+    }
+
+    [Fact]
     public void Test_Patching_Backwards()
     {
         var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiParallelWithTime);
