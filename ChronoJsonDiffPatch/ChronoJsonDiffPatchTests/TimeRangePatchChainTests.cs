@@ -579,7 +579,7 @@ public class TimeRangePatchChainTests
         entityAtKeyDate1.MyPropertyA.Should().Be("A1");
         entityAtKeyDate1.MyPropertyB.Should().Be("B2");
     }
-    
+
     [Fact]
     public void Test_Patching_On_Same_Date_In_The_Past()
     {
@@ -598,6 +598,9 @@ public class TimeRangePatchChainTests
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDate1);
         }
+        var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1.MyPropertyA.Should().Be("A1");
+        entityAtKeyDate1.MyPropertyB.Should().Be("B1");
         var keyDate3 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
@@ -611,8 +614,9 @@ public class TimeRangePatchChainTests
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A1", // at keydate1 a stays A1
-                MyPropertyB = "B2" // but 
+                MyPropertyB = "B2" // but we switch property B to B2
             };
+            // note that in this test there is already a later patch after keydate1
             trpCollection.Add(myEntity, myChangedEntity, keyDate1, FuturePatchBehaviour.KeepTheFuture);
         }
         AssertBasicSanity(myEntity, trpCollection);
@@ -620,13 +624,13 @@ public class TimeRangePatchChainTests
         entityAtKeyDate0.MyPropertyA.Should().Be("A0");
         entityAtKeyDate0.MyPropertyB.Should().Be("B0");
 
-        var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
         entityAtKeyDate1.MyPropertyA.Should().Be("A1");
         entityAtKeyDate1.MyPropertyB.Should().Be("B2");
-        
+
         var entityAtKeyDate3 = trpCollection.PatchToDate(myEntity, keyDate3);
-        entityAtKeyDate1.MyPropertyA.Should().Be("A3");
-        entityAtKeyDate1.MyPropertyB.Should().Be("B3");
+        entityAtKeyDate3.MyPropertyA.Should().Be("A3");
+        entityAtKeyDate3.MyPropertyB.Should().Be("B3");
     }
 
     [Fact]

@@ -243,14 +243,23 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     {
         if (Contains(moment))
         {
-            var entryWhosePatchShouldBeReplaced = GetAll().First(trp => trp.Start >= moment.UtcDateTime);
+            var entriesWhosePatchShouldBeReplaced = GetAll().Where(trp => trp.Start >= moment.UtcDateTime);
+            var entryWhosePatchShouldBeReplaced = entriesWhosePatchShouldBeReplaced.Single(trp => trp.Start == moment.UtcDateTime);
+            // The entryWhosePatchShouldBeReplaced.Patch can only be replaced with patchToBeAdded.Patch if ALL properties of the old and the replaced patch are changed
+            // In general the new patch should describe the difference to the state just before the keydate; That's a subtle difference.
+            if (moment.UtcDateTime != DateTimeOffset.MinValue.UtcDateTime)
+            {
+                var stateJustBeforeThePatch = ToJToken(PatchToDate(initialEntity, moment.UtcDateTime - TimeSpan.FromTicks(1)));
+                var patchAtKeyDate = ToJsonDocument(new JsonDiffPatch().Diff(stateJustBeforeThePatch, changedToken));
+                patchToBeAdded.Patch = patchAtKeyDate;
+            }
             entryWhosePatchShouldBeReplaced.Patch = patchToBeAdded.Patch;
+
             // we also need to modify the following entry.
             // If the original patches are [A,B],[B,C],[C,D] and we replace B with X, then we not only have to replace [A,B] with [A,X] (which we already did in the entryWhosePatchShouldBeReplaced)
             // but also replace [B,C] with [X,C].
             if (GetAll().SingleOrDefault(trp => trp.Start == entryWhosePatchShouldBeReplaced.End) is { } followingEntry)
             {
-                //followingEntry.Patch = 
                 var tokenBeginningOfNextSlice = ToJToken(PatchToDate(initialEntity, followingEntry.Start.ToUniversalTime()));
                 var updatedFollowingPatch = new JsonDiffPatch().Diff(changedToken, tokenBeginningOfNextSlice);
                 followingEntry.Patch = ToJsonDocument(updatedFollowingPatch);
