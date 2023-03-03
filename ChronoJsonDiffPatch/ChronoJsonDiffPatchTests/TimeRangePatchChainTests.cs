@@ -647,6 +647,51 @@ public class TimeRangePatchChainTests
     }
 
     [Fact]
+    public void Test_Patching_Different_Properties_Unordered()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
+        var myEntity = new DummyClassWithTwoProperties
+        {
+            MyPropertyA = "A0",
+            MyPropertyB = "B0",
+        };
+        var keyDate2 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "emptyA",
+                MyPropertyB = "B2"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate2);
+        }
+        var entityAtKeyDate2 = trpCollection.PatchToDate(myEntity, keyDate2);
+        entityAtKeyDate2.MyPropertyA.Should().Be("emptyA");
+        entityAtKeyDate2.MyPropertyB.Should().Be("B2");
+
+        var keyDate1 = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        keyDate1.Should().BeBefore(keyDate2);
+        {
+            var myChangedEntity = new DummyClassWithTwoProperties
+            {
+                MyPropertyA = "A1",
+                MyPropertyB = "B2"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1, FuturePatchBehaviour.KeepTheFuture);
+        }
+        AssertBasicSanity(myEntity, trpCollection);
+
+        var entityAtKeyDate1 = trpCollection.PatchToDate(myEntity, keyDate1);
+        entityAtKeyDate1.MyPropertyA.Should().Be("A1");
+        entityAtKeyDate1.MyPropertyB.Should().Be("B2");
+
+        entityAtKeyDate2 = trpCollection.PatchToDate(myEntity, keyDate2);
+        entityAtKeyDate2.MyPropertyA.Should().Be("emptyA"); // this is a hard one: because of the "KeepTheFuture" the state of myEntity at key1 is reverted at keydate2
+        // this might seem counter intuitive but it's technically correct unless we introduce something like property-specific patching behaviour, which would e.g. specify
+        // that keep-the-future implies that the future should only be kept where future patches actually will have been modified (futur II) a property. 
+        entityAtKeyDate2.MyPropertyB.Should().Be("B2");
+    }
+
+    [Fact]
     public void Test_Patching_Backwards()
     {
         var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiParallelWithTime);
