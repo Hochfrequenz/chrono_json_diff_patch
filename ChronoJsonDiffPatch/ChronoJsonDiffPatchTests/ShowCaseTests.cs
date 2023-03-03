@@ -63,7 +63,7 @@ public class ShowCaseTests
         var stateAtSecondColourChange = chain.PatchToDate(initialBicycle, colourChangeDate2);
         stateAtSecondColourChange.Colour.Should().Be("blue");
         stateAtSecondColourChange.MaxSpeedInKmh.Should().Be(120);
-        
+
         // note that if you use a gray cycle with lower max speed as initial entity, the result looks different:
         var anotherInitialBicycle = new Bicycle
         {
