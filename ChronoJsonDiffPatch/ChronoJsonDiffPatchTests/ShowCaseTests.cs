@@ -6,10 +6,12 @@ namespace ChronoJsonDiffPatchTests;
 
 public class ShowCaseTests
 {
-    class MyEntity
+    class Bicycle
     {
-        [JsonPropertyName("myProperty")]
-        public string MyProperty { get; set; }
+        [JsonPropertyName("colour")]
+        public string Colour { get; set; }
+        [JsonPropertyName("maxSpeedInKmh")]
+        public int MaxSpeedInKmh { get; set; }
     }
 
     /// <summary>
@@ -18,48 +20,64 @@ public class ShowCaseTests
     [Fact]
     public void Test_Three_Patches_Sequentially()
     {
-        var chain = new TimeRangePatchChain<MyEntity>();
-        var myEntityInitially = new MyEntity
+        var chain = new TimeRangePatchChain<Bicycle>();
+        var initialBicycle = new Bicycle // this is the state of the bicycle at beginning of time
         {
-            MyProperty = "initial" // this is the state of the entity at beginning of time
+            Colour = "lila",
+            MaxSpeedInKmh = 120
         };
 
-        var fooDate = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var myEntityFoo = new MyEntity
+        var colourChangeDate1 = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var brownBicycle = new Bicycle
         {
-            MyProperty = "foo"
+            Colour = "brown",
+            MaxSpeedInKmh = 120
         };
 
         // adds the first two patches to the TimePeriodChain
-        chain.Add(myEntityInitially, myEntityFoo, fooDate);
+        chain.Add(initialBicycle, brownBicycle, colourChangeDate1);
 
-        var barDate = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var myEntityBar = new MyEntity
+        var colourChangeDate2 = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var blueBicycle = new Bicycle
         {
-            MyProperty = "bar" // at barDate, MyProperty switches from "foo" to "bar" 
+            Colour = "blue",
+            MaxSpeedInKmh = 120
         };
-        // also track the changes at barDate
-        chain.Add(myEntityInitially, myEntityBar, barDate);
+        // also track the changes at colourChangeDate2
+        chain.Add(initialBicycle, blueBicycle, colourChangeDate2);
 
-        // Now if you know the initial state of myEntity + the chain,
-        // you can retrieve the state of myEntity at any date, by applying the 
+        // Now if you know the initial state of you bicycle + the chain,
+        // you can retrieve the state of the bicycle at any date, by applying the 
         // chronological patches to the initial state.
-        var anyDateBeforeFooDate = new DateTimeOffset(1995, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var stateBeforeFooDate = chain.PatchToDate(myEntityInitially, anyDateBeforeFooDate);
-        stateBeforeFooDate.MyProperty.Should().Be("initial");
+        var arbitraryDateBeforeFirstColourChange = new DateTimeOffset(1995, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var stateAtBeforeFirstColourChange = chain.PatchToDate(initialBicycle, arbitraryDateBeforeFirstColourChange);
+        stateAtBeforeFirstColourChange.Colour.Should().Be("lila");
+        stateAtBeforeFirstColourChange.MaxSpeedInKmh.Should().Be(120);
 
-        // at fooDate, the state of the patched entity changes
-        var stateAtFooDate = chain.PatchToDate(myEntityInitially, fooDate);
-        stateAtFooDate.MyProperty.Should().Be("foo");
+        // at colourChangeDate1, the state of the patched entity changes
+        var stateAtFirstColourChange = chain.PatchToDate(initialBicycle, colourChangeDate1);
+        stateAtFirstColourChange.Colour.Should().Be("brown");
+        stateAtFirstColourChange.MaxSpeedInKmh.Should().Be(120);
 
-        // same goes for barDate
-        var stateAtBarDate = chain.PatchToDate(myEntityInitially, barDate);
-        stateAtBarDate.MyProperty.Should().Be("bar");
+        // same goes for colourChangeDate2
+        var stateAtSecondColourChange = chain.PatchToDate(initialBicycle, colourChangeDate2);
+        stateAtSecondColourChange.Colour.Should().Be("blue");
+        stateAtSecondColourChange.MaxSpeedInKmh.Should().Be(120);
+
+        // note that if you use a gray cycle with lower max speed as initial entity, the result looks different:
+        var anotherInitialBicycle = new Bicycle
+        {
+            Colour = "gray",
+            MaxSpeedInKmh = 25,
+        };
+        chain.PatchToDate(anotherInitialBicycle, DateTimeOffset.MinValue).Colour.Should().Be("gray");
+        chain.PatchToDate(anotherInitialBicycle, colourChangeDate2).Colour.Should().Be("blue");
+        chain.PatchToDate(anotherInitialBicycle, colourChangeDate2).MaxSpeedInKmh.Should().Be(25);
 
         // you can reverse any chain
-        var (stateAtPlusInfinity, reverseChain) = chain.Reverse(myEntityInitially);
+        var (stateAtPlusInfinity, reverseChain) = chain.Reverse(initialBicycle);
         reverseChain.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime);
-        stateAtPlusInfinity.MyProperty.Should().Be("bar");
+        stateAtPlusInfinity.Colour.Should().Be("blue");
         reverseChain.GetAll().Should().AllSatisfy(p => p.PatchingDirection.Should().Be(PatchingDirection.AntiParallelWithTime));
     }
 }
