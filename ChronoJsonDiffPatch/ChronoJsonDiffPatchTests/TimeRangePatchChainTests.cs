@@ -719,4 +719,39 @@ public class TimeRangePatchChainTests
         AssertBasicSanity(myEntity, trpCollection);
         */
     }
+
+    [Fact]
+    public void Test_Patching_Backwards_Throws_Meaningful_Error_For_Inconsistent_Data()
+    {
+        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.ParallelWithTime);
+        var myEntity = new DummyClass
+        {
+            MyProperty = "Foo"
+        };
+        {
+            var keyDate1 = new DateTimeOffset(2034, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "Bar"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate1);
+        }
+        {
+            var keyDate2 = new DateTimeOffset(2035, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            var myChangedEntity = new DummyClass
+            {
+                MyProperty = "Baz"
+            };
+            trpCollection.Add(myEntity, myChangedEntity, keyDate2);
+        }
+        var allPatches = trpCollection.GetAll().ToList();
+        allPatches.Should().HaveCount(3);
+
+        allPatches[1].End = DateTime.MaxValue; // let's a create chain, that is no longer self-consistent and has 2 elements with +infinity as end date
+        allPatches.Where(p => p.End == DateTime.MaxValue).Should().HaveCount(2);
+        Action creatingAChainFromInconsistentPatches = () => new TimeRangePatchChain<DummyClass>(allPatches, PatchingDirection.ParallelWithTime);
+        creatingAChainFromInconsistentPatches.Should().Throw<ArgumentException>()
+            .Where(ae => ae.Message.Contains("The given periods contain ambiguous starts"))
+            .And.InnerException.Should().BeOfType<InvalidOperationException>();
+    }
 }
