@@ -76,8 +76,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         }
 
         var result = timeperiods.OrderBy(tp => tp.Start);
-        var ambigousStarts = result.GroupBy(tp => tp.To).Where(g => g.Count() > 1).Select(g => g.Select(x => x.Start).Distinct());
-        var ambigousEnds = result.GroupBy(tp => tp.End).Where(g => g.Count() > 1).Select(g => g.Select(x => x.End).Distinct()); ;
+        var ambigousStarts = result.GroupBy(tp => tp.Start).Where(g => g.Count() > 1).Select(g => g.Select(x => x.Start.ToString("o")).First()).Distinct();
+        var ambigousEnds = result.GroupBy(tp => tp.End).Where(g => g.Count() > 1).Select(g => g.Select(x => x.End.ToString("o")).First()).Distinct(); ;
         bool baseConstructorIsLikelyToCrash = ambigousStarts.Any() || ambigousEnds.Any();
         if (baseConstructorIsLikelyToCrash)
         {
@@ -88,7 +88,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             catch (InvalidOperationException invalidOpException) when (invalidOpException.Message.EndsWith("out of range"))
             {
                 // if it would crash and we do know the reasons, then we throw a more meaningful exception here instead of waiting for the base class to crash
-                throw new ArgumentException($"The given periods contain ambiguous starts ({ambigousStarts}) or ends ({ambigousEnds})", innerException: invalidOpException);
+                throw new ArgumentException($"The given periods contain ambiguous starts ({string.Join(", ", ambigousStarts)}) or ends ({string.Join(", ", ambigousEnds)})", innerException: invalidOpException);
             }
         }
         return result;
