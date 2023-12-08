@@ -13,7 +13,7 @@ jobs:
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 8.0.100
+          dotnet-version: ${{ matrix.dotnet-version }}
       - name: Run Tests
         working-directory: ./ChronoJsonDiffPatch
         run: dotnet test --configuration Release
