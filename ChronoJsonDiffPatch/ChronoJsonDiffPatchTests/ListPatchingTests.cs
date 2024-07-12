@@ -1,0 +1,90 @@
+﻿using System.Text.Json.Serialization;
+using ChronoJsonDiffPatch;
+using FluentAssertions;
+
+namespace ChronoJsonDiffPatchTests;
+
+public class ListPatchingTests
+{
+    internal record ListItem
+    {
+        [JsonPropertyName("value")] public string Value { get; set; }
+    }
+
+    internal record EntityWithList
+    {
+        [JsonPropertyName("myList")] public List<ListItem> MyList { get; set; }
+    }
+
+
+    [Fact]
+    public void Test_List_Patching_With_Add_Reverse()
+    {
+        var chain = new TimeRangePatchChain<EntityWithList>();
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem>
+            {
+                new() { Value = "Foo" },
+                new() { Value = "Bar" }
+            }
+        };
+        {
+            var updatedEntity1 = new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "fOO" },
+                    new() { Value = "bAR" }
+                }
+            };
+            var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            chain.Add(initialEntity, updatedEntity1, keyDate1);
+            
+            chain.Count.Should().Be(2); // [-infinity, keyDate1); [keyDate1, +infinity)
+            ReverseAndRevert(chain, initialEntity);
+        }
+
+        {
+            var updatedEntity2 = new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "fOO" },
+                    new() { Value = "bAR" },
+                    new() { Value = "bAZ" }
+                }
+            };
+            var keyDate2 = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            chain.Add(initialEntity, updatedEntity2, keyDate2);
+
+            chain.Count.Should().Be(3); // [-infinity, keyDate1); [keyDate1, keyDate2); [keyDate2, +infinity)
+            ReverseAndRevert(chain, initialEntity);
+        }
+        
+        {
+            var updatedEntity3 = new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "Not so foo anymore" },
+                    new() { Value = "bAR" },
+                    new() { Value = "bAZ" }
+                }
+            };
+            var keyDate3 = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            chain.Add(initialEntity, updatedEntity3, keyDate3);
+
+            ReverseAndRevert(chain, initialEntity);
+        }
+    }
+
+    private static Tuple<TimeRangePatchChain<EntityWithList>, EntityWithList> ReverseAndRevert(TimeRangePatchChain<EntityWithList> chain, EntityWithList initialEntity)
+    {
+        var (reverseEntity, reverseChain) = chain.Reverse(initialEntity);
+        var (rereverseEntity, rereverseChain) = reverseChain.Reverse(reverseEntity);
+        rereverseChain.Should().BeEquivalentTo(chain);
+        initialEntity.Should().BeEquivalentTo(rereverseEntity);
+        return new Tuple<TimeRangePatchChain<EntityWithList>, EntityWithList>(rereverseChain, rereverseEntity);
+    }
+}
