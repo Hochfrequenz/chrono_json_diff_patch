@@ -18,7 +18,7 @@ public class ListPatchingTests
 
 
     [Fact]
-    public void Test_List_Patching_With_Add_Reverse()
+    public void Test_List_Patching_Generally_Works_With_Add_And_Reverse()
     {
         var chain = new TimeRangePatchChain<EntityWithList>();
         var initialEntity = new EntityWithList
@@ -40,7 +40,7 @@ public class ListPatchingTests
             };
             var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
             chain.Add(initialEntity, updatedEntity1, keyDate1);
-            
+
             chain.Count.Should().Be(2); // [-infinity, keyDate1); [keyDate1, +infinity)
             ReverseAndRevert(chain, initialEntity);
         }
@@ -61,7 +61,7 @@ public class ListPatchingTests
             chain.Count.Should().Be(3); // [-infinity, keyDate1); [keyDate1, keyDate2); [keyDate2, +infinity)
             ReverseAndRevert(chain, initialEntity);
         }
-        
+
         {
             var updatedEntity3 = new EntityWithList
             {
@@ -79,12 +79,51 @@ public class ListPatchingTests
         }
     }
 
-    private static Tuple<TimeRangePatchChain<EntityWithList>, EntityWithList> ReverseAndRevert(TimeRangePatchChain<EntityWithList> chain, EntityWithList initialEntity)
+    /// <summary>
+    /// In <see cref="Test_List_Patching_Generally_Works_With_Add_And_Reverse"/> we showed that adding and removing list entries is generally well supported by this library.
+    /// In this test, we show, than when users run into an <see cref="ArgumentOutOfRangeException"/>, this is probably due to initial entities not matching the expected state (corrupted).
+    /// </summary>
+    [Fact]
+    public void Reproduce_ArgumentOutOfRangeException()
+    {
+        // we build a chain based on an initial entity, that has 2 items in its list.
+        // then we try to apply the chain to an entity which only has 1 item.
+        // this should allow us to reproduce an IndexOutOfBoundException.
+        var chain = new TimeRangePatchChain<EntityWithList>();
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem>
+            {
+                new() { Value = "My First Value" },
+            }
+        };
+        var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var updatedEntity1 = new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "My First Value" },
+                    new() { Value = "My Second Value" }
+                }
+            };
+
+            chain.Add(initialEntity, updatedEntity1, keyDate1);
+            chain.Count.Should().Be(2); // [-infinity, keyDate1); [keyDate1, +infinity)
+            ReverseAndRevert(chain, initialEntity);
+        }
+        (var antiparallelInitialEntity, var antiparallelChain) = chain.Reverse(initialEntity);
+        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2);
+        antiparallelInitialEntity.MyList.RemoveAt(1);
+        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        applyingPatchesToACorruptedInitialEntity.Should().ThrowExactly<ArgumentOutOfRangeException>();
+    }
+
+    private static void ReverseAndRevert(TimeRangePatchChain<EntityWithList> chain, EntityWithList initialEntity)
     {
         var (reverseEntity, reverseChain) = chain.Reverse(initialEntity);
         var (rereverseEntity, rereverseChain) = reverseChain.Reverse(reverseEntity);
         rereverseChain.Should().BeEquivalentTo(chain);
         initialEntity.Should().BeEquivalentTo(rereverseEntity);
-        return new Tuple<TimeRangePatchChain<EntityWithList>, EntityWithList>(rereverseChain, rereverseEntity);
     }
 }
