@@ -127,7 +127,8 @@ public class ListPatchingTests
     [Fact]
     public void Test_ArgumentOutOfRangeException_Can_Be_Surpressed()
     {
-        var chain = new TimeRangePatchChain<EntityWithList>(skipConditions: new List<ISkipCondition<EntityWithList>> { new SkipPatchesWithUnmatchedListItems<EntityWithList, ListItem>(x => x.MyList) });
+        var chain = new TimeRangePatchChain<EntityWithList>(skipConditions: new List<ISkipCondition<EntityWithList>>
+            { new SkipPatchesWithUnmatchedListItems<EntityWithList, ListItem>(x => x.MyList) });
         var initialEntity = new EntityWithList
         {
             MyList = new List<ListItem>
@@ -155,11 +156,11 @@ public class ListPatchingTests
         var patchingACorrectInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
         patchingACorrectInitialEntity.Should().NotThrow();
 
-        var corruptedInitialEntity = antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
+        var corruptedInitialEntity =
+            antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
         corruptedInitialEntity.MyList.RemoveAt(1);
         var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
         applyingPatchesToACorruptedInitialEntity.Should().NotThrow()
-            // now we expect those patches to be applied, as far as they can be applied. In this case: none ;)
             .And.Subject.Invoke().Should().BeEquivalentTo(corruptedInitialEntity);
         antiparallelChain.PatchesHaveBeenSkipped.Should().BeTrue();
     }

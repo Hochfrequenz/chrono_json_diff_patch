@@ -17,6 +17,7 @@ public class SkipPatchesWithUnmatchedListItems<TEntity, TListItem> : ISkipCondit
     {
         _listAccessor = listAccessor;
     }
+
     /// <summary>
     /// <inheritdoc cref="ISkipCondition{TEntity}"/>
     /// </summary>
@@ -26,11 +27,13 @@ public class SkipPatchesWithUnmatchedListItems<TEntity, TListItem> : ISkipCondit
         {
             return false;
         }
+
         var list = _listAccessor(initialEntity);
         if (list is null)
         {
             return false;
         }
+
         // todo: theoretically I could
         // 1. check the json attributes of the list property,
         // 2. then inspect the failedPatch.Patch and then
