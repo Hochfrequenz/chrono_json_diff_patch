@@ -80,15 +80,12 @@ public class ListPatchingTests
     }
 
     /// <summary>
-    /// In <see cref="Test_List_Patching_Generally_Works_With_Add_And_Reverse"/> we showed that adding and removing list entries is generally well supported by this library.
+    /// In <see cref="Test_List_Patching_Generally_Works_With_Add_And_Reverse"/> we showed that adding and removing list entries is generally well-supported by this library.
     /// In this test, we show, than when users run into an <see cref="ArgumentOutOfRangeException"/>, this is probably due to initial entities not matching the expected state (corrupted).
     /// </summary>
     [Fact]
     public void Reproduce_ArgumentOutOfRangeException()
     {
-        // we build a chain based on an initial entity, that has 2 items in its list.
-        // then we try to apply the chain to an entity which only has 1 item.
-        // this should allow us to reproduce an IndexOutOfBoundException.
         var chain = new TimeRangePatchChain<EntityWithList>();
         var initialEntity = new EntityWithList
         {
@@ -113,9 +110,13 @@ public class ListPatchingTests
             ReverseAndRevert(chain, initialEntity);
         }
         (var antiparallelInitialEntity, var antiparallelChain) = chain.Reverse(initialEntity);
-        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2);
-        antiparallelInitialEntity.MyList.RemoveAt(1);
-        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2, because: "Initially the list had 2 items");
+        var patchingACorrectInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        patchingACorrectInitialEntity.Should().NotThrow();
+
+        var corruptedInitialEntity = antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
+        corruptedInitialEntity.MyList.RemoveAt(1);
+        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
         applyingPatchesToACorruptedInitialEntity.Should().ThrowExactly<ArgumentOutOfRangeException>();
     }
 
