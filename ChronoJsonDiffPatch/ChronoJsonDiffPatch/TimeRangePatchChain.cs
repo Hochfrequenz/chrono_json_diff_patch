@@ -35,6 +35,24 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
     private readonly Func<TEntity, string> _serialize;
     private readonly Func<string, TEntity> _deserialize;
+    private readonly IEnumerable<ISkipCondition<TEntity>>? _skipConditions;
+    private List<TimeRangePatch> _skippedPatches = new();
+
+    /// <summary>
+    /// patches that have been skipped because of errors
+    /// </summary>
+    public IReadOnlyList<TimeRangePatch> SkippedPatches
+    {
+        get => _skippedPatches.AsReadOnly();
+    }
+
+    /// <summary>
+    /// set to true, if, while modifying the chain any of the skip conditions provided to the construct were used.
+    /// </summary>
+    public bool PatchesHaveBeenSkipped
+    {
+        get => SkippedPatches?.Any() == true;
+    }
 
     /// <summary>
     /// converts the given <paramref name="entity"/> to an JToken using the serializer configured in the constructor (or default) 
@@ -77,7 +95,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
         var result = timeperiods.OrderBy(tp => tp.Start);
         var ambigousStarts = result.GroupBy(tp => tp.Start).Where(g => g.Count() > 1).Select(g => g.Select(x => x.Start.ToString("o")).First()).Distinct();
-        var ambigousEnds = result.GroupBy(tp => tp.End).Where(g => g.Count() > 1).Select(g => g.Select(x => x.End.ToString("o")).First()).Distinct(); ;
+        var ambigousEnds = result.GroupBy(tp => tp.End).Where(g => g.Count() > 1).Select(g => g.Select(x => x.End.ToString("o")).First()).Distinct();
+        ;
         bool baseConstructorIsLikelyToCrash = ambigousStarts.Any() || ambigousEnds.Any();
         if (baseConstructorIsLikelyToCrash)
         {
@@ -88,9 +107,11 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             catch (InvalidOperationException invalidOpException) when (invalidOpException.Message.EndsWith("out of range"))
             {
                 // if it would crash and we do know the reasons, then we throw a more meaningful exception here instead of waiting for the base class to crash
-                throw new ArgumentException($"The given periods contain ambiguous starts ({string.Join(", ", ambigousStarts)}) or ends ({string.Join(", ", ambigousEnds)})", innerException: invalidOpException);
+                throw new ArgumentException($"The given periods contain ambiguous starts ({string.Join(", ", ambigousStarts)}) or ends ({string.Join(", ", ambigousEnds)})",
+                    innerException: invalidOpException);
             }
         }
+
         return result;
     }
 
@@ -101,8 +122,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="patchingDirection">the direction in which the patches are to be applied; <see cref="PatchingDirection"/></param>
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
+    /// <param name="skipConditions">optional conditions under which we allow a patch to fail and ignore its changes</param>
     public TimeRangePatchChain(IEnumerable<TimeRangePatch>? timeperiods = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
-        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null) : base(PrepareForTimePeriodChainConstructor(timeperiods))
+        Func<TEntity, string>? serializer = null, Func<string, TEntity>? deserializer = null, IEnumerable<ISkipCondition<TEntity>>? skipConditions = null) : base(
+        PrepareForTimePeriodChainConstructor(timeperiods))
     {
         _serialize = serializer ?? DefaultSerializer;
         _deserialize = deserializer ?? DefaultDeSerializer;
@@ -112,6 +135,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             throw new ArgumentException($"You must not add a patch {patchWithWrongDirection} with direction {patchWithWrongDirection.PatchingDirection}!={PatchingDirection}",
                 nameof(timeperiods));
         }
+
+        _skipConditions = skipConditions;
     }
 
     /// <summary>
@@ -246,11 +271,13 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 var jsonStateWithoutMomentPatch = ToJToken(stateWithoutMomentPatch);
                 var jdpDelta = new JsonDiffPatch();
                 var jsonStateWithMomentPatch = jdpDelta.Patch(jsonStateWithoutMomentPatch, JsonConvert.DeserializeObject<JToken>(patchToBeAdded.Patch!.RootElement.GetRawText()));
-                var jsonStateBeforeMomentPatch = ToJToken(artificialChainWithoutTheRecentlyAddedPatch.PatchToDate(initialEntity, infinitelyNarrowPatch.Start - TimeSpan.FromTicks(1)));
+                var jsonStateBeforeMomentPatch =
+                    ToJToken(artificialChainWithoutTheRecentlyAddedPatch.PatchToDate(initialEntity, infinitelyNarrowPatch.Start - TimeSpan.FromTicks(1)));
                 var jdpDelta2 = new JsonDiffPatch();
                 var result = jdpDelta2.Diff(jsonStateBeforeMomentPatch, jsonStateWithMomentPatch);
                 patchToBeAdded.Patch = ToJsonDocument(result);
             }
+
             Remove(infinitelyNarrowPatch);
         }
     }
@@ -269,6 +296,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 var patchAtKeyDate = ToJsonDocument(new JsonDiffPatch().Diff(stateJustBeforeThePatch, changedToken));
                 patchToBeAdded.Patch = patchAtKeyDate;
             }
+
             entryWhosePatchShouldBeReplaced.Patch = patchToBeAdded.Patch;
 
             // we also need to modify the following entry.
@@ -385,10 +413,12 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             RemoveAt(futureIndex);
         }
+
         if (GetAll().LastOrDefault(p => p.OverlapsWith(patchToBeAdded)) is { } lastOverlappingPatchWhichIsNotDeleted)
         {
             lastOverlappingPatchWhichIsNotDeleted.ShrinkEndTo(patchToBeAdded.Start);
         }
+
         Add(patchToBeAdded);
     }
 
@@ -405,6 +435,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     {
         var jdp = new JsonDiffPatch();
         var left = ToJToken(initialEntity);
+        _skippedPatches = new();
         switch (PatchingDirection)
         {
             case PatchingDirection.ParallelWithTime:
@@ -414,7 +445,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                                  .Where(p => p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null))
                     {
                         var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
-                        left = jdp.Patch(left, jtokenPatch);
+                        try
+                        {
+                            left = jdp.Patch(left, jtokenPatch);
+                        }
+                        catch (Exception exc) when (_skipConditions?.Any() == true)
+                        {
+                            var entityBeforePatch = _deserialize(left.ToString());
+                            if (_skipConditions?.Any(sc => sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)) == true)
+                            {
+                                _skippedPatches.Add(existingPatch);
+                                continue;
+                            }
+
+                            throw; // re-throw
+                        }
                     }
 
                     return _deserialize(JsonConvert.SerializeObject(left));
@@ -426,7 +471,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                                  .Where(p => p.Patch != null && p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null))
                     {
                         var jtokenPatch = JsonConvert.DeserializeObject<JToken>(existingPatch.Patch!.RootElement.GetRawText());
-                        left = jdp.Unpatch(left, jtokenPatch);
+                        try
+                        {
+                            left = jdp.Unpatch(left, jtokenPatch);
+                        }
+                        catch (Exception exc) when (_skipConditions?.Any() == true)
+                        {
+                            var entityBeforePatch = _deserialize(left.ToString());
+                            if (_skipConditions?.Any(sc => sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)) == true)
+                            {
+                                _skippedPatches.Add(existingPatch);
+                                continue;
+                            }
+
+                            throw; // re-throw
+                        }
                     }
 
                     return _deserialize(JsonConvert.SerializeObject(left));
@@ -475,7 +534,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         return backwardsTrp;
                     }).OrderBy(trp => trp.From).ToList();
                     return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtPlusInfinity,
-                        new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiParallelWithTime));
+                        new TimeRangePatchChain<TEntity>(backwardsPatches, PatchingDirection.AntiParallelWithTime, skipConditions: _skipConditions));
                 }
             case PatchingDirection.AntiParallelWithTime:
                 {
@@ -488,7 +547,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             patchingDirection: PatchingDirection.ParallelWithTime);
                         return forwardsTrp;
                     }).OrderBy(trp => trp.From).ToList();
-                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtMinusInfinity, new TimeRangePatchChain<TEntity>(forwardPatches, PatchingDirection.ParallelWithTime));
+                    return new Tuple<TEntity, TimeRangePatchChain<TEntity>>(stateAtMinusInfinity,
+                        new TimeRangePatchChain<TEntity>(forwardPatches, PatchingDirection.ParallelWithTime, skipConditions: _skipConditions));
                 }
             default:
                 throw new ArgumentOutOfRangeException();

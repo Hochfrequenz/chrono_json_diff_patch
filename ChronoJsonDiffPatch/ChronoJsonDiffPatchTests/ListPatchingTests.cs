@@ -118,6 +118,51 @@ public class ListPatchingTests
         corruptedInitialEntity.MyList.RemoveAt(1);
         var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
         applyingPatchesToACorruptedInitialEntity.Should().ThrowExactly<ArgumentOutOfRangeException>();
+        antiparallelChain.PatchesHaveBeenSkipped.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Shows that the error from <see cref="Reproduce_ArgumentOutOfRangeException"/> can be surpressed using a <see cref="ISkipCondition{TEntity}"/>.
+    /// </summary>
+    [Fact]
+    public void Test_ArgumentOutOfRangeException_Can_Be_Surpressed()
+    {
+        var chain = new TimeRangePatchChain<EntityWithList>(skipConditions: new List<ISkipCondition<EntityWithList>>
+            { new SkipPatchesWithUnmatchedListItems<EntityWithList, ListItem>(x => x.MyList) });
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem>
+            {
+                new() { Value = "My First Value" },
+            }
+        };
+        var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        {
+            var updatedEntity1 = new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "My First Value" },
+                    new() { Value = "My Second Value" }
+                }
+            };
+
+            chain.Add(initialEntity, updatedEntity1, keyDate1);
+            chain.Count.Should().Be(2); // [-infinity, keyDate1); [keyDate1, +infinity)
+            ReverseAndRevert(chain, initialEntity);
+        }
+        (var antiparallelInitialEntity, var antiparallelChain) = chain.Reverse(initialEntity);
+        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2, because: "Initially the list had 2 items");
+        var patchingACorrectInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        patchingACorrectInitialEntity.Should().NotThrow();
+
+        var corruptedInitialEntity =
+            antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
+        corruptedInitialEntity.MyList.RemoveAt(1);
+        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        applyingPatchesToACorruptedInitialEntity.Should().NotThrow()
+            .And.Subject.Invoke().Should().BeEquivalentTo(corruptedInitialEntity);
+        antiparallelChain.PatchesHaveBeenSkipped.Should().BeTrue();
     }
 
     private static void ReverseAndRevert(TimeRangePatchChain<EntityWithList> chain, EntityWithList initialEntity)
