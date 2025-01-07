@@ -21,7 +21,7 @@ public class SkipPatchesWithUnmatchedListItems<TEntity, TListItem> : ISkipCondit
     /// <summary>
     /// <inheritdoc cref="ISkipCondition{TEntity}"/>
     /// </summary>
-    public bool ShouldSkipPatch(TEntity initialEntity, TimeRangePatch failedPatch, Exception errorWhilePatching)
+    public virtual bool ShouldSkipPatch(TEntity initialEntity, TimeRangePatch failedPatch, Exception errorWhilePatching)
     {
         if (errorWhilePatching is not ArgumentOutOfRangeException)
         {
