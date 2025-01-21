@@ -559,6 +559,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             case PatchingDirection.ParallelWithTime:
             {
+                var index = -1;
+
                 foreach (
                     var existingPatch in GetAll()
                         .Where(p =>
@@ -573,6 +575,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         )
                 )
                 {
+                    index += 1;
                     var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
                         existingPatch.Patch!.RootElement.GetRawText()
                     );
@@ -583,18 +586,16 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     catch (Exception exc) when (_skipConditions?.Any() == true)
                     {
                         var entityBeforePatch = _deserialize(left.ToString());
+
                         if (
                             _skipConditions?.Any(sc =>
                                 sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
                             ) == true
                         )
                         {
-                            var entityBeforePatch = _deserialize(left.ToString());
-                            if (_skipConditions?.Any(sc => sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)) == true)
-                            {
-                                _skippedPatches.Add(existingPatch);
-                                continue;
-                            }
+                            _skippedPatches.Add(existingPatch);
+                            continue;
+                        }
 
                         throw new PatchingException<TEntity>(
                             stateOfEntityBeforeAnyPatch: initialEntity,
@@ -605,15 +606,13 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             innerException: exc
                         );
                     }
-
-                        throw; // re-throw
-                    }
                 }
 
                 return _deserialize(JsonConvert.SerializeObject(left));
             }
             case PatchingDirection.AntiParallelWithTime:
             {
+                var index = 0;
                 foreach (
                     var existingPatch in GetAll()
                         .Where(p => p.End > keyDate)
@@ -623,6 +622,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         )
                 )
                 {
+                    index += 1;
                     var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
                         existingPatch.Patch!.RootElement.GetRawText()
                     );
@@ -643,7 +643,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             continue;
                         }
 
-                        throw; // re-throw
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches: {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions catched this",
+                            innerException: exc
+                        );
                     }
                 }
 
