@@ -21,7 +21,7 @@ public enum PatchingDirection
     /// </summary>
     /// <remarks>
     /// Although this doesn't feel as natural as <see cref="ParallelWithTime"/>, it might useful if you store changes to an entity in a database and you always want to have the most recent/youngest state as "full" entity and persist the past as patches.
-    /// Then you always start with the youngest entity and patch "backwards" until you reach the point in time/in the past in which you're interested. 
+    /// Then you always start with the youngest entity and patch "backwards" until you reach the point in time/in the past in which you're interested.
     /// </remarks>
     AntiParallelWithTime,
 }

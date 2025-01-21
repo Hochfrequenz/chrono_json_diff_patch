@@ -8,14 +8,15 @@ public class ListPatchingTests
 {
     internal record ListItem
     {
-        [JsonPropertyName("value")] public string Value { get; set; }
+        [JsonPropertyName("value")]
+        public string Value { get; set; }
     }
 
     internal record EntityWithList
     {
-        [JsonPropertyName("myList")] public List<ListItem> MyList { get; set; }
+        [JsonPropertyName("myList")]
+        public List<ListItem> MyList { get; set; }
     }
-
 
     [Fact]
     public void Test_List_Patching_Generally_Works_With_Add_And_Reverse()
@@ -26,8 +27,8 @@ public class ListPatchingTests
             MyList = new List<ListItem>
             {
                 new() { Value = "Foo" },
-                new() { Value = "Bar" }
-            }
+                new() { Value = "Bar" },
+            },
         };
         {
             var updatedEntity1 = new EntityWithList
@@ -35,8 +36,8 @@ public class ListPatchingTests
                 MyList = new List<ListItem>
                 {
                     new() { Value = "fOO" },
-                    new() { Value = "bAR" }
-                }
+                    new() { Value = "bAR" },
+                },
             };
             var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
             chain.Add(initialEntity, updatedEntity1, keyDate1);
@@ -52,8 +53,8 @@ public class ListPatchingTests
                 {
                     new() { Value = "fOO" },
                     new() { Value = "bAR" },
-                    new() { Value = "bAZ" }
-                }
+                    new() { Value = "bAZ" },
+                },
             };
             var keyDate2 = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
             chain.Add(initialEntity, updatedEntity2, keyDate2);
@@ -69,8 +70,8 @@ public class ListPatchingTests
                 {
                     new() { Value = "Not so foo anymore" },
                     new() { Value = "bAR" },
-                    new() { Value = "bAZ" }
-                }
+                    new() { Value = "bAZ" },
+                },
             };
             var keyDate3 = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
             chain.Add(initialEntity, updatedEntity3, keyDate3);
@@ -89,10 +90,7 @@ public class ListPatchingTests
         var chain = new TimeRangePatchChain<EntityWithList>();
         var initialEntity = new EntityWithList
         {
-            MyList = new List<ListItem>
-            {
-                new() { Value = "My First Value" },
-            }
+            MyList = new List<ListItem> { new() { Value = "My First Value" } },
         };
         var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
@@ -101,8 +99,8 @@ public class ListPatchingTests
                 MyList = new List<ListItem>
                 {
                     new() { Value = "My First Value" },
-                    new() { Value = "My Second Value" }
-                }
+                    new() { Value = "My Second Value" },
+                },
             };
 
             chain.Add(initialEntity, updatedEntity1, keyDate1);
@@ -110,14 +108,26 @@ public class ListPatchingTests
             ReverseAndRevert(chain, initialEntity);
         }
         (var antiparallelInitialEntity, var antiparallelChain) = chain.Reverse(initialEntity);
-        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2, because: "Initially the list had 2 items");
-        var patchingACorrectInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        antiparallelInitialEntity
+            .Should()
+            .Match<EntityWithList>(
+                x => x.MyList.Count == 2,
+                because: "Initially the list had 2 items"
+            );
+        var patchingACorrectInitialEntity = () =>
+            antiparallelChain.PatchToDate(
+                antiparallelInitialEntity,
+                keyDate1 - TimeSpan.FromDays(10)
+            );
         patchingACorrectInitialEntity.Should().NotThrow();
 
         var corruptedInitialEntity = antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
         corruptedInitialEntity.MyList.RemoveAt(1);
-        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
-        applyingPatchesToACorruptedInitialEntity.Should().ThrowExactly<ArgumentOutOfRangeException>();
+        var applyingPatchesToACorruptedInitialEntity = () =>
+            antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        applyingPatchesToACorruptedInitialEntity
+            .Should()
+            .ThrowExactly<ArgumentOutOfRangeException>();
         antiparallelChain.PatchesHaveBeenSkipped.Should().BeFalse();
     }
 
@@ -127,14 +137,15 @@ public class ListPatchingTests
     [Fact]
     public void Test_ArgumentOutOfRangeException_Can_Be_Surpressed()
     {
-        var chain = new TimeRangePatchChain<EntityWithList>(skipConditions: new List<ISkipCondition<EntityWithList>>
-            { new SkipPatchesWithUnmatchedListItems<EntityWithList, ListItem>(x => x.MyList) });
+        var chain = new TimeRangePatchChain<EntityWithList>(
+            skipConditions: new List<ISkipCondition<EntityWithList>>
+            {
+                new SkipPatchesWithUnmatchedListItems<EntityWithList, ListItem>(x => x.MyList),
+            }
+        );
         var initialEntity = new EntityWithList
         {
-            MyList = new List<ListItem>
-            {
-                new() { Value = "My First Value" },
-            }
+            MyList = new List<ListItem> { new() { Value = "My First Value" } },
         };
         var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
@@ -143,8 +154,8 @@ public class ListPatchingTests
                 MyList = new List<ListItem>
                 {
                     new() { Value = "My First Value" },
-                    new() { Value = "My Second Value" }
-                }
+                    new() { Value = "My Second Value" },
+                },
             };
 
             chain.Add(initialEntity, updatedEntity1, keyDate1);
@@ -152,20 +163,36 @@ public class ListPatchingTests
             ReverseAndRevert(chain, initialEntity);
         }
         (var antiparallelInitialEntity, var antiparallelChain) = chain.Reverse(initialEntity);
-        antiparallelInitialEntity.Should().Match<EntityWithList>(x => x.MyList.Count == 2, because: "Initially the list had 2 items");
-        var patchingACorrectInitialEntity = () => antiparallelChain.PatchToDate(antiparallelInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        antiparallelInitialEntity
+            .Should()
+            .Match<EntityWithList>(
+                x => x.MyList.Count == 2,
+                because: "Initially the list had 2 items"
+            );
+        var patchingACorrectInitialEntity = () =>
+            antiparallelChain.PatchToDate(
+                antiparallelInitialEntity,
+                keyDate1 - TimeSpan.FromDays(10)
+            );
         patchingACorrectInitialEntity.Should().NotThrow();
 
-        var corruptedInitialEntity =
-            antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
+        var corruptedInitialEntity = antiparallelInitialEntity; // we modify the reference here, but that's fine. We improve the readability but don't re-use the antiparallelInitialEntity anywhere downstream.
         corruptedInitialEntity.MyList.RemoveAt(1);
-        var applyingPatchesToACorruptedInitialEntity = () => antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
-        applyingPatchesToACorruptedInitialEntity.Should().NotThrow()
-            .And.Subject.Invoke().Should().BeEquivalentTo(corruptedInitialEntity);
+        var applyingPatchesToACorruptedInitialEntity = () =>
+            antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
+        applyingPatchesToACorruptedInitialEntity
+            .Should()
+            .NotThrow()
+            .And.Subject.Invoke()
+            .Should()
+            .BeEquivalentTo(corruptedInitialEntity);
         antiparallelChain.PatchesHaveBeenSkipped.Should().BeTrue();
     }
 
-    private static void ReverseAndRevert(TimeRangePatchChain<EntityWithList> chain, EntityWithList initialEntity)
+    private static void ReverseAndRevert(
+        TimeRangePatchChain<EntityWithList> chain,
+        EntityWithList initialEntity
+    )
     {
         var (reverseEntity, reverseChain) = chain.Reverse(initialEntity);
         var (rereverseEntity, rereverseChain) = reverseChain.Reverse(reverseEntity);
