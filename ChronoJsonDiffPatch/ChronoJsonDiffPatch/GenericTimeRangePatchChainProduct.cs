@@ -12,12 +12,14 @@ namespace ChronoJsonDiffPatch;
 /// </remarks>
 /// <typeparam name="TProductEntity">type that holds the state of n different types at a given point in time</typeparam>
 /// <typeparam name="TChainsAndEntities">the initial state and respective chains of a the different types</typeparam>
-public abstract class GenericTimeRangePatchChainProduct<TChainsAndEntities, TProductEntity> where TChainsAndEntities : IChainsAndEntities<TProductEntity>
+public abstract class GenericTimeRangePatchChainProduct<TChainsAndEntities, TProductEntity>
+    where TChainsAndEntities : IChainsAndEntities<TProductEntity>
 {
     /// <summary>
     /// the relevant initial states and chains
     /// </summary>
     private readonly TChainsAndEntities _chainsAndEntities;
+
     /// <summary>
     /// instantiate the generic chain product by providing an instance of a type that holds all chains and respective initial entities.
     /// </summary>
@@ -26,6 +28,7 @@ public abstract class GenericTimeRangePatchChainProduct<TChainsAndEntities, TPro
     {
         _chainsAndEntities = chainsAndEntities;
     }
+
     /// <summary>
     /// returns the joint history of all chains involved in <typeparamref name="TChainsAndEntities"/>
     /// </summary>
@@ -33,7 +36,8 @@ public abstract class GenericTimeRangePatchChainProduct<TChainsAndEntities, TPro
     [Pure]
     public IEnumerable<TProductEntity> GetAll()
     {
-        var result = _chainsAndEntities.GetPatchingDates()
+        var result = _chainsAndEntities
+            .GetPatchingDates()
             .Where(dt => dt != DateTime.MinValue)
             .Where(dt => dt != DateTime.MaxValue)
             .Distinct()

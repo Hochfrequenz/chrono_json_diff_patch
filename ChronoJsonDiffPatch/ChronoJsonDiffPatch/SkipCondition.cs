@@ -21,5 +21,9 @@ public interface ISkipCondition<in TEntity>
     /// <param name="errorWhilePatching">any error that occurred</param>
     /// <param name="failedPatch">the patch that lead to the exception <paramref name="errorWhilePatching"/></param>
     /// <returns>true if the patch should be skipped</returns>
-    public bool ShouldSkipPatch(TEntity initialEntity, TimeRangePatch failedPatch, Exception errorWhilePatching);
+    public bool ShouldSkipPatch(
+        TEntity initialEntity,
+        TimeRangePatch failedPatch,
+        Exception errorWhilePatching
+    );
 }
