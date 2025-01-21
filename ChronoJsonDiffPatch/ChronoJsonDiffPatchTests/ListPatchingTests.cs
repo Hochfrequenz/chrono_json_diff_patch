@@ -127,7 +127,11 @@ public class ListPatchingTests
             antiparallelChain.PatchToDate(corruptedInitialEntity, keyDate1 - TimeSpan.FromDays(10));
         applyingPatchesToACorruptedInitialEntity
             .Should()
-            .ThrowExactly<ArgumentOutOfRangeException>();
+            .ThrowExactly<PatchingException<EntityWithList>>()
+            .Which.InnerException.Should()
+            .NotBeNull()
+            .And.Subject.Should()
+            .BeOfType<ArgumentOutOfRangeException>();
         antiparallelChain.PatchesHaveBeenSkipped.Should().BeFalse();
     }
 
