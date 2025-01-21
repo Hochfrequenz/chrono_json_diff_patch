@@ -583,7 +583,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     {
                         left = jdp.Patch(left, jtokenPatch);
                     }
-                    catch (Exception exc) when (_skipConditions?.Any() == true)
+                    catch (Exception exc)
                     {
                         var entityBeforePatch = _deserialize(left.ToString());
 
@@ -630,7 +630,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     {
                         left = jdp.Unpatch(left, jtokenPatch);
                     }
-                    catch (Exception exc) when (_skipConditions?.Any() == true)
+                    catch (Exception exc)
                     {
                         var entityBeforePatch = _deserialize(left.ToString());
                         if (
