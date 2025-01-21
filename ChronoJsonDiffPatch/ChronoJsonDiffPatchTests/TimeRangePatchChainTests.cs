@@ -16,6 +16,7 @@ public class TimeRangePatchChainTests
     {
         [JsonPropertyName("myPropertyA")]
         public string MyPropertyA { get; set; }
+
         [JsonPropertyName("myPropertyB")]
         public string MyPropertyB { get; set; }
     }
@@ -26,11 +27,18 @@ public class TimeRangePatchChainTests
     /// <param name="initialState"></param>
     /// <param name="chain"></param>
     /// <param name="numberOfReverseChecks">how often should the chain be reversed and checked again for consistency? Any number &gt; 2 is not meaningful</param>
-    private static void AssertBasicSanity<TBaseClass>(TBaseClass initialState, TimeRangePatchChain<TBaseClass> chain, int numberOfReverseChecks = 2)
+    private static void AssertBasicSanity<TBaseClass>(
+        TBaseClass initialState,
+        TimeRangePatchChain<TBaseClass> chain,
+        int numberOfReverseChecks = 2
+    )
     {
         if (numberOfReverseChecks is < 0 or > 4)
         {
-            throw new ArgumentOutOfRangeException(nameof(numberOfReverseChecks), $"should be between 0 <= {nameof(numberOfReverseChecks)} <= 4");
+            throw new ArgumentOutOfRangeException(
+                nameof(numberOfReverseChecks),
+                $"should be between 0 <= {nameof(numberOfReverseChecks)} <= 4"
+            );
         }
         chain.HasStart.Should().BeFalse();
         chain.HasEnd.Should().BeFalse();
@@ -41,78 +49,171 @@ public class TimeRangePatchChainTests
         chain.Last.End.Year.Should().Be(DateTimeOffset.MaxValue.Year);
 
         // please don't ever add 23:59:59 or alike.
-        chain.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => p.End.Second.Should().Be(0), because: "in our tests we only use second 0")
-            .And.AllSatisfy(p => p.End.Minute.Should().Be(0), because: "in our tests we only use minute 0")
-            .And.AllSatisfy(p => p.Start.Day.Should().Be(1), because: "in our tests we only use day 1")
-            .And.AllSatisfy(p => p.End.Day.Should().Be(1), because: "in out tests we only use day 1")
+        chain
+            .Where(p => p.End != DateTime.MaxValue)
+            .Should()
+            .AllSatisfy(
+                p => p.End.Second.Should().Be(0),
+                because: "in our tests we only use second 0"
+            )
+            .And.AllSatisfy(
+                p => p.End.Minute.Should().Be(0),
+                because: "in our tests we only use minute 0"
+            )
+            .And.AllSatisfy(
+                p => p.Start.Day.Should().Be(1),
+                because: "in our tests we only use day 1"
+            )
+            .And.AllSatisfy(
+                p => p.End.Day.Should().Be(1),
+                because: "in out tests we only use day 1"
+            )
             .And.AllSatisfy(p => p.Start.Kind.Should().Be(DateTimeKind.Utc))
             .And.AllSatisfy(p => p.End.Kind.Should().Be(DateTimeKind.Utc))
-            .And.Subject.Cast<TimeRangePatch>().Should()
+            .And.Subject.Cast<TimeRangePatch>()
+            .Should()
             .AllSatisfy(p => p.PatchingDirection.Should().Be(chain.PatchingDirection));
 
-        chain.Where(p => p.End != DateTime.MaxValue).Should()
-            .AllSatisfy(p => chain.Any(q => q.Start == p.End).Should().BeTrue(), because: "The ends of all entries p shall be the start of another entry q");
-        chain.Where(p => p.Start != DateTime.MinValue).Should()
-            .AllSatisfy(p => chain.Any(q => q.End == p.Start).Should().BeTrue(), because: "The starts of all entries p shall be the end of another entry q");
+        chain
+            .Where(p => p.End != DateTime.MaxValue)
+            .Should()
+            .AllSatisfy(
+                p => chain.Any(q => q.Start == p.End).Should().BeTrue(),
+                because: "The ends of all entries p shall be the start of another entry q"
+            );
+        chain
+            .Where(p => p.Start != DateTime.MinValue)
+            .Should()
+            .AllSatisfy(
+                p => chain.Any(q => q.End == p.Start).Should().BeTrue(),
+                because: "The starts of all entries p shall be the end of another entry q"
+            );
         if (numberOfReverseChecks == 0)
         {
             return;
         }
         var (reversedInitialState, reversedChain) = chain.Reverse(initialEntity: initialState);
         reversedChain.PatchingDirection.Should().NotBe(chain.PatchingDirection);
-        AssertBasicSanity(reversedInitialState, reversedChain, numberOfReverseChecks = numberOfReverseChecks - 1);
+        AssertBasicSanity(
+            reversedInitialState,
+            reversedChain,
+            numberOfReverseChecks = numberOfReverseChecks - 1
+        );
         foreach (var patchDate in chain.Select(p => p.Start))
         {
             var stateInForwardChain = chain.PatchToDate(initialState, patchDate);
             var stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, patchDate);
-            stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {patchDate:O} should match");
+            stateInBackwardChain
+                .Should()
+                .BeEquivalentTo(
+                    stateInForwardChain,
+                    because: $"The states at {patchDate:O} should match"
+                );
             if (patchDate != DateTimeOffset.MinValue.UtcDateTime)
             {
                 var slightlyBeforePatchDate = patchDate - TimeSpan.FromTicks(1);
                 stateInForwardChain = chain.PatchToDate(initialState, slightlyBeforePatchDate);
-                stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, slightlyBeforePatchDate);
-                stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {slightlyBeforePatchDate:O} should match");
+                stateInBackwardChain = reversedChain.PatchToDate(
+                    reversedInitialState,
+                    slightlyBeforePatchDate
+                );
+                stateInBackwardChain
+                    .Should()
+                    .BeEquivalentTo(
+                        stateInForwardChain,
+                        because: $"The states at {slightlyBeforePatchDate:O} should match"
+                    );
             }
 
             var slightlyAfterPatchDate = patchDate + TimeSpan.FromTicks(1);
             stateInForwardChain = chain.PatchToDate(initialState, slightlyAfterPatchDate);
-            stateInBackwardChain = reversedChain.PatchToDate(reversedInitialState, slightlyAfterPatchDate);
-            stateInBackwardChain.Should().BeEquivalentTo(stateInForwardChain, because: $"The states at {slightlyAfterPatchDate:O} should match");
+            stateInBackwardChain = reversedChain.PatchToDate(
+                reversedInitialState,
+                slightlyAfterPatchDate
+            );
+            stateInBackwardChain
+                .Should()
+                .BeEquivalentTo(
+                    stateInForwardChain,
+                    because: $"The states at {slightlyAfterPatchDate:O} should match"
+                );
         }
 
         var reversedChainDirection = reversedChain.PatchingDirection;
-        var copiedReversedChain = new TimeRangePatchChain<DummyClass>(reversedChain.GetAll(), reversedChainDirection);
+        var copiedReversedChain = new TimeRangePatchChain<DummyClass>(
+            reversedChain.GetAll(),
+            reversedChainDirection
+        );
         copiedReversedChain.Should().BeEquivalentTo(reversedChain);
     }
 
     [Fact]
     public void Test_Contains()
     {
-        var trpA = new TimeRangePatch(patch: null, from: new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), to: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var trpB = new TimeRangePatch(patch: null, from: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var trpA = new TimeRangePatch(
+            patch: null,
+            from: new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            to: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+        var trpB = new TimeRangePatch(
+            patch: null,
+            from: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         var trpCollection = new TimeRangePatchChain<DummyClass>(new[] { trpA, trpB });
-        trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero)).Should().BeTrue();
-        trpCollection.Contains(new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)).Should().BeTrue();
-        trpCollection.Contains(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)).Should().BeFalse();
+        trpCollection
+            .Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero))
+            .Should()
+            .BeTrue();
+        trpCollection
+            .Contains(new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero))
+            .Should()
+            .BeTrue();
+        trpCollection
+            .Contains(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero))
+            .Should()
+            .BeFalse();
     }
 
     [Fact]
     public void Test_Contains_With_Grace()
     {
-        var trpA = new TimeRangePatch(patch: null, from: new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), to: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var trpB = new TimeRangePatch(patch: null, from: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var trpA = new TimeRangePatch(
+            patch: null,
+            from: new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            to: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+        var trpB = new TimeRangePatch(
+            patch: null,
+            from: new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         var trpCollection = new TimeRangePatchChain<DummyClass>(new[] { trpA, trpB });
 
         for (var i = -1000; i <= 1000; i += 100)
         {
-            trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(i)).Should().BeTrue();
+            trpCollection
+                .Contains(
+                    new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(i)
+                )
+                .Should()
+                .BeTrue();
             if (i != 0)
             {
-                trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(i), graceTicks: 0).Should().BeFalse();
+                trpCollection
+                    .Contains(
+                        new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero)
+                            + TimeSpan.FromTicks(i),
+                        graceTicks: 0
+                    )
+                    .Should()
+                    .BeFalse();
             }
         }
-        trpCollection.Contains(new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(1001)).Should().BeFalse();
+        trpCollection
+            .Contains(
+                new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero) + TimeSpan.FromTicks(1001)
+            )
+            .Should()
+            .BeFalse();
     }
 
     /// <summary>
@@ -128,15 +229,18 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var myChangedEntity = new DummyClass
         {
-            MyProperty = "bar" // then switch to bar at key date
+            MyProperty = "bar", // then switch to bar at key date
         };
         var keyDate = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         trpCollection.Add(myEntity, myChangedEntity, keyDate);
-        var actual = trpCollection.PatchToDate(myEntity, keyDate + TimeSpan.FromDays(daysToKeyDate));
+        var actual = trpCollection.PatchToDate(
+            myEntity,
+            keyDate + TimeSpan.FromDays(daysToKeyDate)
+        );
         actual.MyProperty.Should().Be(expectedProperty);
 
         AssertBasicSanity(myEntity, trpCollection);
@@ -151,13 +255,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar" // switch to bar at keydate A
+                MyProperty = "bar", // switch to bar at keydate A
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateA);
         }
@@ -165,11 +269,14 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to baz at keydate B
+                MyProperty = "baz", // switch to baz at keydate B
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
-        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = trpCollection.PatchToDate(
+            myEntity,
+            new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be("foo");
 
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
@@ -193,13 +300,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar" // switch to bar at keydate A
+                MyProperty = "bar", // switch to bar at keydate A
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateA);
         }
@@ -207,18 +314,21 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "old-baz1" // switch to baz at keydate B
+                MyProperty = "old-baz1", // switch to baz at keydate B
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "new-baz" // switch to new-baz, also at keydate B
+                MyProperty = "new-baz", // switch to new-baz, also at keydate B
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
-        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = trpCollection.PatchToDate(
+            myEntity,
+            new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be("foo");
 
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
@@ -238,13 +348,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar1" // switch to bar1 at keydate A
+                MyProperty = "bar1", // switch to bar1 at keydate A
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateA);
         }
@@ -252,19 +362,27 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to baz at keydate B
+                MyProperty = "baz", // switch to baz at keydate B
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar2" // now switch to bar2 at keydate A and overwrite the existing bar1 without loosing the following baz
+                MyProperty = "bar2", // now switch to bar2 at keydate A and overwrite the existing bar1 without loosing the following baz
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDateA, FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDateA,
+                FuturePatchBehaviour.KeepTheFuture
+            );
         }
 
-        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = trpCollection.PatchToDate(
+            myEntity,
+            new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be("foo");
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
         actualA.MyProperty.Should().Be("bar2");
@@ -283,13 +401,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateA = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar1" // switch to bar1 at keydate A
+                MyProperty = "bar1", // switch to bar1 at keydate A
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateA);
         }
@@ -297,19 +415,27 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to baz at keydate B
+                MyProperty = "baz", // switch to baz at keydate B
             };
             trpCollection.Add(myEntity, myAnotherEntity, keyDateB);
         }
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar2" // now switch to bar2 at keydate A and overwrite the existing bar1; discard the future
+                MyProperty = "bar2", // now switch to bar2 at keydate A and overwrite the existing bar1; discard the future
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDateA, FuturePatchBehaviour.OverwriteTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDateA,
+                FuturePatchBehaviour.OverwriteTheFuture
+            );
         }
 
-        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = trpCollection.PatchToDate(
+            myEntity,
+            new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be("foo");
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
         actualA.MyProperty.Should().Be("bar2");
@@ -328,13 +454,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to bar at keydate B
+                MyProperty = "baz", // switch to bar at keydate B
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
@@ -342,11 +468,19 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
+                MyProperty = "bar", // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
             };
-            trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myAnotherEntity,
+                keyDateA,
+                futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture
+            );
         }
-        var actualBeforePatch = trpCollection.PatchToDate(myEntity, new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = trpCollection.PatchToDate(
+            myEntity,
+            new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be("foo");
 
         var actualA = trpCollection.PatchToDate(myEntity, keyDateA);
@@ -366,13 +500,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "A" // start with foo
+            MyProperty = "A", // start with foo
         };
         var keyDateD = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "D" // switch to "D" at keydate D
+                MyProperty = "D", // switch to "D" at keydate D
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateD);
         }
@@ -380,9 +514,14 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "C" // switch to C at keydate C
+                MyProperty = "C", // switch to C at keydate C
             };
-            trpCollection.Add(myEntity, myAnotherEntity, keyDateC, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myAnotherEntity,
+                keyDateC,
+                futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture
+            );
         }
         AssertBasicSanity(myEntity, trpCollection);
 
@@ -390,9 +529,14 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "B" // switch to B at keydate B
+                MyProperty = "B", // switch to B at keydate B
             };
-            trpCollection.Add(myEntity, myAnotherEntity, keyDateB, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myAnotherEntity,
+                keyDateB,
+                futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture
+            );
         }
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("B");
@@ -416,15 +560,20 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "A" // start with foo
+            MyProperty = "A", // start with foo
         };
         var keyDateC = new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "C" // switch to "C" at keydate C
+                MyProperty = "C", // switch to "C" at keydate C
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDateC, FuturePatchBehaviour.OverwriteTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDateC,
+                FuturePatchBehaviour.OverwriteTheFuture
+            );
         }
         var actualC = trpCollection.PatchToDate(myEntity, keyDateC);
         actualC.MyProperty.Should().Be("C");
@@ -432,9 +581,14 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "B" // switch to B at keydate B
+                MyProperty = "B", // switch to B at keydate B
             };
-            trpCollection.Add(myEntity, myAnotherEntity, keyDateB, futurePatchBehaviour: FuturePatchBehaviour.OverwriteTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myAnotherEntity,
+                keyDateB,
+                futurePatchBehaviour: FuturePatchBehaviour.OverwriteTheFuture
+            );
         }
         var actualB = trpCollection.PatchToDate(myEntity, keyDateB);
         actualB.MyProperty.Should().Be("B");
@@ -449,10 +603,7 @@ public class TimeRangePatchChainTests
     public void Test_Patching_Many_Dates()
     {
         var chain = new TimeRangePatchChain<DummyClass>();
-        var initialEntity = new DummyClass
-        {
-            MyProperty = "initial"
-        };
+        var initialEntity = new DummyClass { MyProperty = "initial" };
         var datesAndValues = new Dictionary<DateTimeOffset, string>
         {
             { new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), "2022" },
@@ -463,15 +614,20 @@ public class TimeRangePatchChainTests
         };
         foreach (var (patchDatetime, value) in datesAndValues)
         {
-            var patchedEntity = new DummyClass
-            {
-                MyProperty = value
-            };
-            chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+            var patchedEntity = new DummyClass { MyProperty = value };
+            chain.Add(
+                initialEntity,
+                patchedEntity,
+                patchDatetime,
+                FuturePatchBehaviour.KeepTheFuture
+            );
             AssertBasicSanity(initialEntity, chain);
         }
 
-        var actualBeforePatch = chain.PatchToDate(initialEntity, new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var actualBeforePatch = chain.PatchToDate(
+            initialEntity,
+            new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
         actualBeforePatch.MyProperty.Should().Be(initialEntity.MyProperty);
 
         foreach (var (keyDate, beschreibung) in datesAndValues.Skip(1))
@@ -489,10 +645,7 @@ public class TimeRangePatchChainTests
     public void Test_Patching_Add_Constructor()
     {
         var chain = new TimeRangePatchChain<DummyClass>();
-        var initialEntity = new DummyClass
-        {
-            MyProperty = "initial"
-        };
+        var initialEntity = new DummyClass { MyProperty = "initial" };
         var datesAndValues = new Dictionary<DateTimeOffset, string>
         {
             { new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero), "2022" },
@@ -503,11 +656,13 @@ public class TimeRangePatchChainTests
         };
         foreach (var (patchDatetime, value) in datesAndValues)
         {
-            var patchedEntity = new DummyClass
-            {
-                MyProperty = value
-            };
-            chain.Add(initialEntity, patchedEntity, patchDatetime, FuturePatchBehaviour.KeepTheFuture);
+            var patchedEntity = new DummyClass { MyProperty = value };
+            chain.Add(
+                initialEntity,
+                patchedEntity,
+                patchDatetime,
+                FuturePatchBehaviour.KeepTheFuture
+            );
             AssertBasicSanity(initialEntity, chain);
         }
         // now instantiate another chain by using the chains of the existing one:
@@ -522,13 +677,13 @@ public class TimeRangePatchChainTests
         var trpCollection = new TimeRangePatchChain<DummyClass>();
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo
+            MyProperty = "foo", // start with foo
         };
         var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "baz" // switch to bar at keydate B
+                MyProperty = "baz", // switch to bar at keydate B
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
@@ -537,9 +692,10 @@ public class TimeRangePatchChainTests
         {
             var myAnotherEntity = new DummyClass
             {
-                MyProperty = "bar" // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
+                MyProperty = "bar", // switch to bar at keydate A (but this time apply the A patch _after_ the B patch
             };
-            addInThePastWithoutSpecifyingBehaviour = () => trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
+            addInThePastWithoutSpecifyingBehaviour = () =>
+                trpCollection.Add(myEntity, myAnotherEntity, keyDateA, futurePatchBehaviour: null);
         }
         addInThePastWithoutSpecifyingBehaviour.Should().Throw<ArgumentNullException>();
     }
@@ -548,27 +704,28 @@ public class TimeRangePatchChainTests
     public void Test_Patching_On_Same_Date()
     {
         var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
-        var myEntity = new DummyClassWithTwoProperties
-        {
-            MyPropertyA = "A0",
-            MyPropertyB = "B0",
-        };
+        var myEntity = new DummyClassWithTwoProperties { MyPropertyA = "A0", MyPropertyB = "B0" };
         var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A1",
-                MyPropertyB = "B1"
+                MyPropertyB = "B1",
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDate1);
         }
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
-                MyPropertyA = "A1",// A stays at A1
-                MyPropertyB = "B2" // but B changes to B2
+                MyPropertyA = "A1", // A stays at A1
+                MyPropertyB = "B2", // but B changes to B2
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDate1, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDate1,
+                futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture
+            );
         }
         AssertBasicSanity(myEntity, trpCollection);
         var entityAtKeyDate0 = trpCollection.PatchToDate(myEntity, DateTimeOffset.MinValue);
@@ -584,17 +741,13 @@ public class TimeRangePatchChainTests
     public void Test_Patching_On_Same_Date_In_The_Past()
     {
         var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
-        var myEntity = new DummyClassWithTwoProperties
-        {
-            MyPropertyA = "A0",
-            MyPropertyB = "B0",
-        };
+        var myEntity = new DummyClassWithTwoProperties { MyPropertyA = "A0", MyPropertyB = "B0" };
         var keyDate1 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A1",
-                MyPropertyB = "B1"
+                MyPropertyB = "B1",
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDate1);
         }
@@ -606,27 +759,42 @@ public class TimeRangePatchChainTests
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A0.5",
-                MyPropertyB = "B0.5"
+                MyPropertyB = "B0.5",
             };
-            trpCollection.Add(myEntity, myChangedEntity, keydate0b, FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keydate0b,
+                FuturePatchBehaviour.KeepTheFuture
+            );
         }
         var keyDate3 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A3",
-                MyPropertyB = "B3"
+                MyPropertyB = "B3",
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDate3, futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDate3,
+                futurePatchBehaviour: FuturePatchBehaviour.KeepTheFuture
+            );
         }
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A1", // at keydate1 a stays A1
-                MyPropertyB = "B2" // but we switch property B to B2
+                MyPropertyB = "B2", // but we switch property B to B2
             };
             // note that in this test there is already a later patch after keydate1
-            trpCollection.Add(myEntity, myChangedEntity, keyDate1, FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDate1,
+                FuturePatchBehaviour.KeepTheFuture
+            );
         }
         AssertBasicSanity(myEntity, trpCollection);
         var entityAtKeyDate0 = trpCollection.PatchToDate(myEntity, DateTimeOffset.MinValue);
@@ -650,17 +818,13 @@ public class TimeRangePatchChainTests
     public void Test_Patching_Different_Properties_Unordered()
     {
         var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>();
-        var myEntity = new DummyClassWithTwoProperties
-        {
-            MyPropertyA = "A0",
-            MyPropertyB = "B0",
-        };
+        var myEntity = new DummyClassWithTwoProperties { MyPropertyA = "A0", MyPropertyB = "B0" };
         var keyDate2 = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         {
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "emptyA",
-                MyPropertyB = "B2"
+                MyPropertyB = "B2",
             };
             trpCollection.Add(myEntity, myChangedEntity, keyDate2);
         }
@@ -674,9 +838,14 @@ public class TimeRangePatchChainTests
             var myChangedEntity = new DummyClassWithTwoProperties
             {
                 MyPropertyA = "A1",
-                MyPropertyB = "B2"
+                MyPropertyB = "B2",
             };
-            trpCollection.Add(myEntity, myChangedEntity, keyDate1, FuturePatchBehaviour.KeepTheFuture);
+            trpCollection.Add(
+                myEntity,
+                myChangedEntity,
+                keyDate1,
+                FuturePatchBehaviour.KeepTheFuture
+            );
         }
         AssertBasicSanity(myEntity, trpCollection);
 
@@ -687,24 +856,26 @@ public class TimeRangePatchChainTests
         entityAtKeyDate2 = trpCollection.PatchToDate(myEntity, keyDate2);
         entityAtKeyDate2.MyPropertyA.Should().Be("emptyA"); // this is a hard one: because of the "KeepTheFuture" the state of myEntity at key1 is reverted at keydate2
         // this might seem counter intuitive but it's technically correct unless we introduce something like property-specific patching behaviour, which would e.g. specify
-        // that keep-the-future implies that the future should only be kept where future patches actually will have been modified (futur II) a property. 
+        // that keep-the-future implies that the future should only be kept where future patches actually will have been modified (futur II) a property.
         entityAtKeyDate2.MyPropertyB.Should().Be("B2");
     }
 
     [Fact]
     public void Test_Patching_Backwards()
     {
-        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.AntiParallelWithTime);
+        var trpCollection = new TimeRangePatchChain<DummyClass>(
+            patchingDirection: PatchingDirection.AntiParallelWithTime
+        );
         var myEntity = new DummyClass
         {
-            MyProperty = "foo" // start with foo at +infinity
+            MyProperty = "foo", // start with foo at +infinity
         };
         var keyDateB = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         Action addAction;
         {
             var myChangedEntity = new DummyClass
             {
-                MyProperty = "bar" // before the keydate B the value was bar
+                MyProperty = "bar", // before the keydate B the value was bar
             };
             addAction = () => trpCollection.Add(myEntity, myChangedEntity, keyDateB);
         }
@@ -723,25 +894,18 @@ public class TimeRangePatchChainTests
     [Fact]
     public void Test_Patching_Backwards_Throws_Meaningful_Error_For_Inconsistent_Data()
     {
-        var trpCollection = new TimeRangePatchChain<DummyClass>(patchingDirection: PatchingDirection.ParallelWithTime);
-        var myEntity = new DummyClass
-        {
-            MyProperty = "Foo"
-        };
+        var trpCollection = new TimeRangePatchChain<DummyClass>(
+            patchingDirection: PatchingDirection.ParallelWithTime
+        );
+        var myEntity = new DummyClass { MyProperty = "Foo" };
         {
             var keyDate1 = new DateTimeOffset(2034, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            var myChangedEntity = new DummyClass
-            {
-                MyProperty = "Bar"
-            };
+            var myChangedEntity = new DummyClass { MyProperty = "Bar" };
             trpCollection.Add(myEntity, myChangedEntity, keyDate1);
         }
         {
             var keyDate2 = new DateTimeOffset(2035, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            var myChangedEntity = new DummyClass
-            {
-                MyProperty = "Baz"
-            };
+            var myChangedEntity = new DummyClass { MyProperty = "Baz" };
             trpCollection.Add(myEntity, myChangedEntity, keyDate2);
         }
         var allPatches = trpCollection.GetAll().ToList();
@@ -749,9 +913,13 @@ public class TimeRangePatchChainTests
 
         allPatches[1].End = DateTime.MaxValue; // let's a create chain, that is no longer self-consistent and has 2 elements with +infinity as end date
         allPatches.Where(p => p.End == DateTime.MaxValue).Should().HaveCount(2);
-        Action creatingAChainFromInconsistentPatches = () => new TimeRangePatchChain<DummyClass>(allPatches, PatchingDirection.ParallelWithTime);
-        creatingAChainFromInconsistentPatches.Should().Throw<ArgumentException>()
+        Action creatingAChainFromInconsistentPatches = () =>
+            new TimeRangePatchChain<DummyClass>(allPatches, PatchingDirection.ParallelWithTime);
+        creatingAChainFromInconsistentPatches
+            .Should()
+            .Throw<ArgumentException>()
             .Where(ae => ae.Message.Contains("The given periods contain ambiguous starts"))
-            .And.InnerException.Should().BeOfType<InvalidOperationException>();
+            .And.InnerException.Should()
+            .BeOfType<InvalidOperationException>();
     }
 }

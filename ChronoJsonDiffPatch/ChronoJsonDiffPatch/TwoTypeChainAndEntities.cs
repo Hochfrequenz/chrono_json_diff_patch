@@ -7,7 +7,8 @@ namespace ChronoJsonDiffPatch;
 /// </summary>
 /// <typeparam name="TEntityA"></typeparam>
 /// <typeparam name="TEntityB"></typeparam>
-public class TwoTypeChainAndEntities<TEntityA, TEntityB> : IChainsAndEntities<ProductEntity<TEntityA, TEntityB>>
+public class TwoTypeChainAndEntities<TEntityA, TEntityB>
+    : IChainsAndEntities<ProductEntity<TEntityA, TEntityB>>
 {
     private readonly TimeRangePatchChain<TEntityA> _chainA;
     private readonly TimeRangePatchChain<TEntityB> _chainB;
@@ -21,7 +22,12 @@ public class TwoTypeChainAndEntities<TEntityA, TEntityB> : IChainsAndEntities<Pr
     /// <param name="initialStateOfA"></param>
     /// <param name="chainB"></param>
     /// <param name="initialStateOfB"></param>
-    public TwoTypeChainAndEntities(TimeRangePatchChain<TEntityA> chainA, TEntityA initialStateOfA, TimeRangePatchChain<TEntityB> chainB, TEntityB initialStateOfB)
+    public TwoTypeChainAndEntities(
+        TimeRangePatchChain<TEntityA> chainA,
+        TEntityA initialStateOfA,
+        TimeRangePatchChain<TEntityB> chainB,
+        TEntityB initialStateOfB
+    )
     {
         _chainA = chainA;
         _chainB = chainB;
@@ -42,7 +48,9 @@ public class TwoTypeChainAndEntities<TEntityA, TEntityB> : IChainsAndEntities<Pr
     [Pure]
     public IEnumerable<DateTime> GetPatchingDates()
     {
-        return _chainA.GetAll().Select(trp => trp.Start)
+        return _chainA
+            .GetAll()
+            .Select(trp => trp.Start)
             .Union(_chainB.GetAll().Select(trp => trp.Start))
             .Distinct();
     }

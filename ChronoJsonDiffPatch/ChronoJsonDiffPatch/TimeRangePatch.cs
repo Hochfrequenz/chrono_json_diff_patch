@@ -31,7 +31,11 @@ public class TimeRangePatch : TimeRange
     public DateTimeOffset From
     {
         get => Start == DateTime.MinValue ? DateTimeOffset.MinValue : new DateTimeOffset(Start);
-        set => Start = value == DateTimeOffset.MinValue ? DateTimeOffset.MinValue.UtcDateTime : value.UtcDateTime;
+        set =>
+            Start =
+                value == DateTimeOffset.MinValue
+                    ? DateTimeOffset.MinValue.UtcDateTime
+                    : value.UtcDateTime;
     }
 
     /// <summary>
@@ -50,7 +54,9 @@ public class TimeRangePatch : TimeRange
             {
                 if (value.Value < From)
                 {
-                    throw new ArgumentException($"{nameof(value)} ({value.Value:o}) must not be lower than {nameof(From)} ({From:o})");
+                    throw new ArgumentException(
+                        $"{nameof(value)} ({value.Value:o}) must not be lower than {nameof(From)} ({From:o})"
+                    );
                 }
 
                 End = value.Value.UtcDateTime;
@@ -73,6 +79,7 @@ public class TimeRangePatch : TimeRange
     public DateTime? Timestamp { get; set; }
 
     private readonly PatchingDirection _patchingDirection;
+
     /// <summary>
     /// Describes of this patch shall be applied "left to right" or "right to left".
     /// For details see <see cref="PatchingDirection"/>
@@ -91,14 +98,18 @@ public class TimeRangePatch : TimeRange
     /// by default: assume the From-date is now
     /// </summary>
     /// <param name="patch"></param>
-    public TimeRangePatch(JsonDocument? patch) : this(DateTimeOffset.UtcNow, patch)
-    {
-    }
+    public TimeRangePatch(JsonDocument? patch)
+        : this(DateTimeOffset.UtcNow, patch) { }
 
     /// <summary>
     /// instantiate with given "from" date and open end
     /// </summary>
-    public TimeRangePatch(DateTimeOffset from, JsonDocument? patch, DateTimeOffset? to = null, PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime)
+    public TimeRangePatch(
+        DateTimeOffset from,
+        JsonDocument? patch,
+        DateTimeOffset? to = null,
+        PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime
+    )
     {
         To = to;
         From = from;
