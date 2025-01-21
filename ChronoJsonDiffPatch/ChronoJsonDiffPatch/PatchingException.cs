@@ -54,4 +54,8 @@ public class PatchingException<TEntity> : Exception
         FailedPatch = patch;
         Index = index;
     }
+
+    /// <inheritdoc />
+    public override string Message =>
+        $"{base.Message}. Patch (index {Index}): {FailedPatch ?? "<null>"}; State: {StateOfEntityBeforePatch}";
 }
