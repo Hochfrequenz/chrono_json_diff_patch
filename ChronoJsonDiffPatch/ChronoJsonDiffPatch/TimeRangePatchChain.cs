@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.Contracts;
+using System.Diagnostics.Contracts;
 using Itenso.TimePeriod;
 using JsonDiffPatchDotNet;
 using Newtonsoft.Json;
@@ -458,8 +458,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                                 continue;
                             }
 
-                            throw; // re-throw
-                        }
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches: {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions catched this",
+                            innerException: exc
+                        );
                     }
 
                     return _deserialize(JsonConvert.SerializeObject(left));

@@ -10,3 +10,11 @@ ChronoJsonDiffPatch/ChronoJsonDiffPatch/bin/Debug/net7.0/
 ChronoJsonDiffPatch/ChronoJsonDiffPatch.sln.DotSettings.user
 
 ChronoJsonDiffPatch/ChronoJsonDiffPatch/bin/Debug/ChronoJsonDiffPatch.xml
+
+*.dll
+
+*.pdb
+
+*.xml
+
+*.exe
