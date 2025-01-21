@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.Contracts;
+using System.Diagnostics.Contracts;
 using Itenso.TimePeriod;
 using JsonDiffPatchDotNet;
 using Newtonsoft.Json;
@@ -559,6 +559,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         {
             case PatchingDirection.ParallelWithTime:
             {
+                var index = -1;
+
                 foreach (
                     var existingPatch in GetAll()
                         .Where(p =>
@@ -573,6 +575,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         )
                 )
                 {
+                    index += 1;
                     var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
                         existingPatch.Patch!.RootElement.GetRawText()
                     );
@@ -580,9 +583,10 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     {
                         left = jdp.Patch(left, jtokenPatch);
                     }
-                    catch (Exception exc) when (_skipConditions?.Any() == true)
+                    catch (Exception exc)
                     {
                         var entityBeforePatch = _deserialize(left.ToString());
+
                         if (
                             _skipConditions?.Any(sc =>
                                 sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
@@ -593,7 +597,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             continue;
                         }
 
-                        throw; // re-throw
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
+                            innerException: exc
+                        );
                     }
                 }
 
@@ -601,6 +612,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             }
             case PatchingDirection.AntiParallelWithTime:
             {
+                var index = 0;
                 foreach (
                     var existingPatch in GetAll()
                         .Where(p => p.End > keyDate)
@@ -610,6 +622,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                         )
                 )
                 {
+                    index += 1;
                     var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
                         existingPatch.Patch!.RootElement.GetRawText()
                     );
@@ -617,7 +630,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     {
                         left = jdp.Unpatch(left, jtokenPatch);
                     }
-                    catch (Exception exc) when (_skipConditions?.Any() == true)
+                    catch (Exception exc)
                     {
                         var entityBeforePatch = _deserialize(left.ToString());
                         if (
@@ -630,7 +643,14 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             continue;
                         }
 
-                        throw; // re-throw
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
+                            innerException: exc
+                        );
                     }
                 }
 
