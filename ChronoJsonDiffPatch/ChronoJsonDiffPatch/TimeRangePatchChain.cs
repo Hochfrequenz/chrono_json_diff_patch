@@ -602,7 +602,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             left: left,
                             patch: jtokenPatch,
                             index: index,
-                            message: $"Failed to apply patches: {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions catched this",
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
                             innerException: exc
                         );
                     }
@@ -648,7 +648,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                             left: left,
                             patch: jtokenPatch,
                             index: index,
-                            message: $"Failed to apply patches: {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions catched this",
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
                             innerException: exc
                         );
                     }
