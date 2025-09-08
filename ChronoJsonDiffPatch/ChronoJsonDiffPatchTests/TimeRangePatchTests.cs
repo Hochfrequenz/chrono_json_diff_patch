@@ -1,6 +1,6 @@
 using System.Text.Json;
+using AwesomeAssertions;
 using ChronoJsonDiffPatch;
-using FluentAssertions;
 using Itenso.TimePeriod;
 
 namespace ChronoJsonDiffPatchTests;

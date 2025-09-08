@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
+using AwesomeAssertions;
 using ChronoJsonDiffPatch;
-using FluentAssertions;
 
 namespace ChronoJsonDiffPatchTests;
 
