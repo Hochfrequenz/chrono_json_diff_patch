@@ -600,7 +600,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
                         throw new PatchingException<TEntity>(
                             stateOfEntityBeforeAnyPatch: initialEntity,
-                            left: left,
+                            left: entityBeforePatch,
                             patch: jtokenPatch,
                             index: index,
                             message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
@@ -646,7 +646,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
                         throw new PatchingException<TEntity>(
                             stateOfEntityBeforeAnyPatch: initialEntity,
-                            left: left,
+                            left: entityBeforePatch,
                             patch: jtokenPatch,
                             index: index,
                             message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
