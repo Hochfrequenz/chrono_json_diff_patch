@@ -15,7 +15,6 @@ dotnet add package ChronoJsonDiffPatch
 | Version     | Number                                                                  |
 | ----------- | ----------------------------------------------------------------------- |
 | Stable      | ![Nuget Package](https://badgen.net/nuget/v/ChronoJsonDiffPatch)        |
-| Pre-Release | ![Nuget Prerelease](https://badgen.net/nuget/v/ChronoJsonDiffPatch/pre) |
 
 ## Usage / Minimal Working Example
 
@@ -134,8 +133,5 @@ The patches then look like this:
 - The code has [at least a 90%](https://github.com/Hochfrequenz/chrono_json_diff_patch/blob/main/.github/workflows/unittests_and_coverage.yml#L34) unit test coverage. ✔️
 - The ChronoJsonDiffPatch package has no dependencies except for `TimePeriodLibrary.NET` and `JsonDiffPatch.NET`. ✔️
 
-## Release Workflow
-
-To create a **pre-release** nuget package, create a tag of the form `prerelease-vx.y.z` where `x.y.z` is the semantic version of the pre-release. This will create and push nuget packages with the specified version `x.y.z` and a `-betaYYYYMMDDHHmmss` suffix.
 
 To create a **release** nuget package, create a tag of the form `vx.y.z` where `x.y.z` is the semantic version of the release. This will create and push nuget packages with the specified version `x.y.z`.
