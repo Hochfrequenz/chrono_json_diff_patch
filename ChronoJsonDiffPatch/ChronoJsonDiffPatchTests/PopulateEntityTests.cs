@@ -62,6 +62,27 @@ public class PopulateEntityTests
     }
 
     /// <summary>
+    /// Tests that calling the 3-argument PatchToDate without a populateEntity action throws InvalidOperationException
+    /// </summary>
+    [Fact]
+    public void PatchToDate_WithTargetEntity_ThrowsWhenNoPopulateEntityAction()
+    {
+        // Arrange: create a chain WITHOUT populateEntity
+        var chain = new TimeRangePatchChain<DummyClass>();
+        var myEntity = new DummyClass { MyProperty = "foo" };
+        var myChangedEntity = new DummyClass { MyProperty = "bar" };
+        var keyDate = new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        chain.Add(myEntity, myChangedEntity, keyDate);
+        var targetEntity = new DummyClass { MyProperty = "original" };
+
+        // Act & Assert
+        var act = () => chain.PatchToDate(myEntity, keyDate, targetEntity);
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*populateEntity*");
+    }
+
+    /// <summary>
     /// Twin of <see cref="TimeRangePatchChainTests.Test_Single_Patch"/>
     /// </summary>
     [Theory]
