@@ -922,4 +922,181 @@ public class TimeRangePatchChainTests
             .And.InnerException.Should()
             .BeOfType<InvalidOperationException>();
     }
+
+    [Fact]
+    public void Test_PatchToDate_With_TargetEntity_Preserves_Identity()
+    {
+        // Arrange: Create a chain with populateEntity action
+        var trpCollection = new TimeRangePatchChain<DummyClass>(
+            populateEntity: (json, target) =>
+                Newtonsoft.Json.JsonConvert.PopulateObject(json, target)
+        );
+
+        var initialEntity = new DummyClass { MyProperty = "Initial" };
+        var changedEntity = new DummyClass { MyProperty = "Changed" };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        trpCollection.Add(initialEntity, changedEntity, keyDate);
+
+        // Act: Create a target entity and populate it using PatchToDate
+        var targetEntity = new DummyClass { MyProperty = "ORM-Tracked-Instance" };
+        var originalReference = targetEntity; // Keep reference to verify identity
+
+        trpCollection.PatchToDate(initialEntity, keyDate, targetEntity);
+
+        // Assert: The target entity is the same instance (identity preserved)
+        ReferenceEquals(targetEntity, originalReference).Should().BeTrue();
+        targetEntity.MyProperty.Should().Be("Changed");
+    }
+
+    [Fact]
+    public void Test_PatchToDate_With_TargetEntity_AntiParallelWithTime()
+    {
+        // Arrange: Create a forward chain, then reverse it
+        var forwardChain = new TimeRangePatchChain<DummyClass>(
+            populateEntity: (json, target) =>
+                Newtonsoft.Json.JsonConvert.PopulateObject(json, target)
+        );
+
+        var initialEntity = new DummyClass { MyProperty = "Initial" };
+        var changedEntity = new DummyClass { MyProperty = "Changed" };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        forwardChain.Add(initialEntity, changedEntity, keyDate);
+
+        var (stateAtPlusInfinity, reversedChain) = forwardChain.Reverse(initialEntity);
+
+        // Create a new chain with the reversed patches and populateEntity
+        var antiParallelChain = new TimeRangePatchChain<DummyClass>(
+            reversedChain.GetAll(),
+            PatchingDirection.AntiParallelWithTime,
+            populateEntity: (json, target) =>
+                Newtonsoft.Json.JsonConvert.PopulateObject(json, target)
+        );
+
+        // Act: Populate target entity at a date before the change
+        var targetEntity = new DummyClass { MyProperty = "ORM-Tracked-Instance" };
+        var originalReference = targetEntity;
+        var beforeKeyDate = new DateTimeOffset(2023, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        antiParallelChain.PatchToDate(stateAtPlusInfinity, beforeKeyDate, targetEntity);
+
+        // Assert: Identity preserved and value correct
+        ReferenceEquals(targetEntity, originalReference).Should().BeTrue();
+        targetEntity.MyProperty.Should().Be("Initial");
+    }
+
+    [Fact]
+    public void Test_PatchToDate_With_TargetEntity_Throws_When_No_PopulateEntity_Provided()
+    {
+        // Arrange: Create a chain WITHOUT populateEntity action
+        var trpCollection = new TimeRangePatchChain<DummyClass>();
+
+        var initialEntity = new DummyClass { MyProperty = "Initial" };
+        var changedEntity = new DummyClass { MyProperty = "Changed" };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        trpCollection.Add(initialEntity, changedEntity, keyDate);
+
+        var targetEntity = new DummyClass { MyProperty = "Target" };
+
+        // Act & Assert
+        Action patchWithTarget = () =>
+            trpCollection.PatchToDate(initialEntity, keyDate, targetEntity);
+
+        patchWithTarget.Should().Throw<InvalidOperationException>().WithMessage("*populateEntity*");
+    }
+
+    [Fact]
+    public void Test_PatchToDate_With_TargetEntity_Multiple_Patches()
+    {
+        // Arrange: Create a chain with multiple patches
+        var trpCollection = new TimeRangePatchChain<DummyClass>(
+            populateEntity: (json, target) =>
+                Newtonsoft.Json.JsonConvert.PopulateObject(json, target)
+        );
+
+        var initialEntity = new DummyClass { MyProperty = "V1" };
+        trpCollection.Add(
+            initialEntity,
+            new DummyClass { MyProperty = "V2" },
+            new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+        trpCollection.Add(
+            initialEntity,
+            new DummyClass { MyProperty = "V3" },
+            new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+        trpCollection.Add(
+            initialEntity,
+            new DummyClass { MyProperty = "V4" },
+            new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+
+        // Act & Assert: Test at different dates
+        var targetEntity = new DummyClass { MyProperty = "ORM-Tracked" };
+        var originalReference = targetEntity;
+
+        // At V2
+        trpCollection.PatchToDate(
+            initialEntity,
+            new DateTimeOffset(2022, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            targetEntity
+        );
+        ReferenceEquals(targetEntity, originalReference).Should().BeTrue();
+        targetEntity.MyProperty.Should().Be("V2");
+
+        // At V3
+        trpCollection.PatchToDate(
+            initialEntity,
+            new DateTimeOffset(2023, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            targetEntity
+        );
+        ReferenceEquals(targetEntity, originalReference).Should().BeTrue();
+        targetEntity.MyProperty.Should().Be("V3");
+
+        // At V4
+        trpCollection.PatchToDate(
+            initialEntity,
+            new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            targetEntity
+        );
+        ReferenceEquals(targetEntity, originalReference).Should().BeTrue();
+        targetEntity.MyProperty.Should().Be("V4");
+    }
+
+    [Fact]
+    public void Test_PatchToDate_With_TargetEntity_Returns_Same_Result_As_Regular_PatchToDate()
+    {
+        // Arrange
+        var trpCollection = new TimeRangePatchChain<DummyClassWithTwoProperties>(
+            populateEntity: (json, target) =>
+                Newtonsoft.Json.JsonConvert.PopulateObject(json, target)
+        );
+
+        var initialEntity = new DummyClassWithTwoProperties
+        {
+            MyPropertyA = "A1",
+            MyPropertyB = "B1",
+        };
+        trpCollection.Add(
+            initialEntity,
+            new DummyClassWithTwoProperties { MyPropertyA = "A2", MyPropertyB = "B2" },
+            new DateTimeOffset(2022, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+        trpCollection.Add(
+            initialEntity,
+            new DummyClassWithTwoProperties { MyPropertyA = "A3", MyPropertyB = "B3" },
+            new DateTimeOffset(2023, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        );
+
+        var keyDate = new DateTimeOffset(2022, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        // Act
+        var resultFromRegularPatchToDate = trpCollection.PatchToDate(initialEntity, keyDate);
+
+        var targetEntity = new DummyClassWithTwoProperties { MyPropertyA = "X", MyPropertyB = "Y" };
+        trpCollection.PatchToDate(initialEntity, keyDate, targetEntity);
+
+        // Assert: Both should have the same values
+        targetEntity.MyPropertyA.Should().Be(resultFromRegularPatchToDate.MyPropertyA);
+        targetEntity.MyPropertyB.Should().Be(resultFromRegularPatchToDate.MyPropertyB);
+    }
 }
