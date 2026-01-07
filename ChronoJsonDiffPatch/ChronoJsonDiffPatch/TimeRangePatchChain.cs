@@ -35,6 +35,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
     private readonly Func<TEntity, string> _serialize;
     private readonly Func<string, TEntity> _deserialize;
+    private readonly Action<string, TEntity>? _populateEntity;
     private readonly IEnumerable<ISkipCondition<TEntity>>? _skipConditions;
     private List<TimeRangePatch> _skippedPatches = new();
 
@@ -135,18 +136,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="patchingDirection">the direction in which the patches are to be applied; <see cref="PatchingDirection"/></param>
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
+    /// <param name="populateEntity">an optional action that populates an existing entity instance with JSON data instead of creating a new instance; useful for ORM scenarios where you need to preserve entity identity</param>
     /// <param name="skipConditions">optional conditions under which we allow a patch to fail and ignore its changes</param>
     public TimeRangePatchChain(
         IEnumerable<TimeRangePatch>? timeperiods = null,
         PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
         Func<TEntity, string>? serializer = null,
         Func<string, TEntity>? deserializer = null,
+        Action<string, TEntity>? populateEntity = null,
         IEnumerable<ISkipCondition<TEntity>>? skipConditions = null
     )
         : base(PrepareForTimePeriodChainConstructor(timeperiods))
     {
         _serialize = serializer ?? DefaultSerializer;
         _deserialize = deserializer ?? DefaultDeSerializer;
+        _populateEntity = populateEntity;
         PatchingDirection = patchingDirection;
         if (
             timeperiods?.FirstOrDefault(tpr => tpr.PatchingDirection != PatchingDirection) is
@@ -656,6 +660,135 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                 }
 
                 return _deserialize(JsonConvert.SerializeObject(left));
+            }
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    /// <summary>
+    /// Applies patches up to <paramref name="keyDate"/> and populates the <paramref name="targetEntity"/> in-place,
+    /// preserving its object identity. This is useful for ORM scenarios where you need to update an entity
+    /// that is already tracked by the ORM without replacing it with a new instance.
+    /// </summary>
+    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time (used as base for patching)</param>
+    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
+    /// <param name="targetEntity">the entity instance to populate with the patched state; this instance is modified in-place</param>
+    /// <exception cref="InvalidOperationException">thrown when no populateEntity action was provided in the constructor</exception>
+    public void PatchToDate(TEntity initialEntity, DateTimeOffset keyDate, TEntity targetEntity)
+    {
+        if (_populateEntity is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot populate target entity because no {nameof(_populateEntity)} action was provided in the constructor. "
+                    + $"Please provide a populateEntity action (e.g., (json, entity) => JsonConvert.PopulateObject(json, entity)) when constructing the {nameof(TimeRangePatchChain<TEntity>)}."
+            );
+        }
+
+        var jdp = new JsonDiffPatch();
+        var left = ToJToken(initialEntity);
+        _skippedPatches = new();
+
+        switch (PatchingDirection)
+        {
+            case PatchingDirection.ParallelWithTime:
+            {
+                var index = -1;
+                foreach (
+                    var existingPatch in GetAll()
+                        .Where(p =>
+                            (
+                                (p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue)
+                                || p.Start <= keyDate.UtcDateTime
+                            )
+                            && p.Patch != null
+                        )
+                        .Where(p =>
+                            p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null
+                        )
+                )
+                {
+                    index += 1;
+                    var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
+                        existingPatch.Patch!.RootElement.GetRawText()
+                    );
+                    try
+                    {
+                        left = jdp.Patch(left, jtokenPatch);
+                    }
+                    catch (Exception exc)
+                    {
+                        var entityBeforePatch = _deserialize(left.ToString());
+                        if (
+                            _skipConditions?.Any(sc =>
+                                sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
+                            ) == true
+                        )
+                        {
+                            _skippedPatches.Add(existingPatch);
+                            continue;
+                        }
+
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
+                            innerException: exc
+                        );
+                    }
+                }
+
+                _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
+                return;
+            }
+            case PatchingDirection.AntiParallelWithTime:
+            {
+                var index = 0;
+                foreach (
+                    var existingPatch in GetAll()
+                        .Where(p => p.End > keyDate)
+                        .Where(p =>
+                            p.Patch != null
+                            && p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null
+                        )
+                )
+                {
+                    index += 1;
+                    var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
+                        existingPatch.Patch!.RootElement.GetRawText()
+                    );
+                    try
+                    {
+                        left = jdp.Unpatch(left, jtokenPatch);
+                    }
+                    catch (Exception exc)
+                    {
+                        var entityBeforePatch = _deserialize(left.ToString());
+                        if (
+                            _skipConditions?.Any(sc =>
+                                sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
+                            ) == true
+                        )
+                        {
+                            _skippedPatches.Add(existingPatch);
+                            continue;
+                        }
+
+                        throw new PatchingException<TEntity>(
+                            stateOfEntityBeforeAnyPatch: initialEntity,
+                            left: left,
+                            patch: jtokenPatch,
+                            index: index,
+                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
+                            innerException: exc
+                        );
+                    }
+                }
+
+                _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
+                return;
             }
             default:
                 throw new ArgumentOutOfRangeException();
