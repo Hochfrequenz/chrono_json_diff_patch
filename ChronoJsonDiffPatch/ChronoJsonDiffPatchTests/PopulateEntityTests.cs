@@ -77,9 +77,7 @@ public class PopulateEntityTests
 
         // Act & Assert
         var act = () => chain.PatchToDate(myEntity, keyDate, targetEntity);
-        act.Should()
-            .Throw<InvalidOperationException>()
-            .WithMessage("*populateEntity*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*populateEntity*");
     }
 
     /// <summary>

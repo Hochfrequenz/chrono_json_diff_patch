@@ -548,18 +548,15 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     }
 
     /// <summary>
-    /// start at <paramref name="initialEntity"/> at beginning of time.
-    /// Then apply all the patches up to <paramref name="keyDate"/> and return the state of the entity at <paramref name="keyDate"/>
+    /// Applies all patches up to <paramref name="keyDate"/> and returns the patched JToken.
+    /// This is the core patching logic shared by all PatchToDate overloads.
     /// </summary>
-    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
-    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
-    /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
-    [Pure]
-    public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
+    private JToken ApplyPatchesToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
         var jdp = new JsonDiffPatch();
         var left = ToJToken(initialEntity);
         _skippedPatches = new();
+
         switch (PatchingDirection)
         {
             case PatchingDirection.ParallelWithTime:
@@ -613,7 +610,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     }
                 }
 
-                return _deserialize(JsonConvert.SerializeObject(left));
+                return left;
             }
             case PatchingDirection.AntiParallelWithTime:
             {
@@ -659,11 +656,25 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     }
                 }
 
-                return _deserialize(JsonConvert.SerializeObject(left));
+                return left;
             }
             default:
                 throw new ArgumentOutOfRangeException();
         }
+    }
+
+    /// <summary>
+    /// start at <paramref name="initialEntity"/> at beginning of time.
+    /// Then apply all the patches up to <paramref name="keyDate"/> and return the state of the entity at <paramref name="keyDate"/>
+    /// </summary>
+    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
+    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
+    /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
+    [Pure]
+    public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
+    {
+        var left = ApplyPatchesToDate(initialEntity, keyDate);
+        return _deserialize(JsonConvert.SerializeObject(left));
     }
 
     /// <summary>
@@ -685,114 +696,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             );
         }
 
-        var jdp = new JsonDiffPatch();
-        var left = ToJToken(initialEntity);
-        _skippedPatches = new();
-
-        switch (PatchingDirection)
-        {
-            case PatchingDirection.ParallelWithTime:
-            {
-                var index = -1;
-                foreach (
-                    var existingPatch in GetAll()
-                        .Where(p =>
-                            (
-                                (p.Start == DateTime.MinValue && keyDate != DateTimeOffset.MinValue)
-                                || p.Start <= keyDate.UtcDateTime
-                            )
-                            && p.Patch != null
-                        )
-                        .Where(p =>
-                            p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null
-                        )
-                )
-                {
-                    index += 1;
-                    var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
-                        existingPatch.Patch!.RootElement.GetRawText()
-                    );
-                    try
-                    {
-                        left = jdp.Patch(left, jtokenPatch);
-                    }
-                    catch (Exception exc)
-                    {
-                        var entityBeforePatch = _deserialize(left.ToString());
-                        if (
-                            _skipConditions?.Any(sc =>
-                                sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
-                            ) == true
-                        )
-                        {
-                            _skippedPatches.Add(existingPatch);
-                            continue;
-                        }
-
-                        throw new PatchingException<TEntity>(
-                            stateOfEntityBeforeAnyPatch: initialEntity,
-                            left: left,
-                            patch: jtokenPatch,
-                            index: index,
-                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
-                            innerException: exc
-                        );
-                    }
-                }
-
-                _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
-                return;
-            }
-            case PatchingDirection.AntiParallelWithTime:
-            {
-                var index = 0;
-                foreach (
-                    var existingPatch in GetAll()
-                        .Where(p => p.End > keyDate)
-                        .Where(p =>
-                            p.Patch != null
-                            && p.Patch!.RootElement.ValueKind != System.Text.Json.JsonValueKind.Null
-                        )
-                )
-                {
-                    index += 1;
-                    var jtokenPatch = JsonConvert.DeserializeObject<JToken>(
-                        existingPatch.Patch!.RootElement.GetRawText()
-                    );
-                    try
-                    {
-                        left = jdp.Unpatch(left, jtokenPatch);
-                    }
-                    catch (Exception exc)
-                    {
-                        var entityBeforePatch = _deserialize(left.ToString());
-                        if (
-                            _skipConditions?.Any(sc =>
-                                sc.ShouldSkipPatch(entityBeforePatch, existingPatch, exc)
-                            ) == true
-                        )
-                        {
-                            _skippedPatches.Add(existingPatch);
-                            continue;
-                        }
-
-                        throw new PatchingException<TEntity>(
-                            stateOfEntityBeforeAnyPatch: initialEntity,
-                            left: left,
-                            patch: jtokenPatch,
-                            index: index,
-                            message: $"Failed to apply patches ({PatchingDirection}): {exc.Message}; None of the {_skipConditions?.Count() ?? 0} skip conditions applied",
-                            innerException: exc
-                        );
-                    }
-                }
-
-                _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
-                return;
-            }
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
+        var left = ApplyPatchesToDate(initialEntity, keyDate);
+        _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
     }
 
     /// <summary>
