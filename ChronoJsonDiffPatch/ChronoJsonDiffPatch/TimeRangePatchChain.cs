@@ -35,6 +35,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
 
     private readonly Func<TEntity, string> _serialize;
     private readonly Func<string, TEntity> _deserialize;
+    private readonly Action<string, TEntity>? _populateEntity;
     private readonly IEnumerable<ISkipCondition<TEntity>>? _skipConditions;
     private List<TimeRangePatch> _skippedPatches = new();
 
@@ -135,18 +136,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="patchingDirection">the direction in which the patches are to be applied; <see cref="PatchingDirection"/></param>
     /// <param name="serializer">a function that is able to serialize <typeparamref name="TEntity"/></param>
     /// <param name="deserializer">a function that is able to deserialize <typeparamref name="TEntity"/></param>
+    /// <param name="populateEntity">an optional action that populates an existing entity instance with JSON data instead of creating a new instance; useful for ORM scenarios where you need to preserve entity identity</param>
     /// <param name="skipConditions">optional conditions under which we allow a patch to fail and ignore its changes</param>
     public TimeRangePatchChain(
         IEnumerable<TimeRangePatch>? timeperiods = null,
         PatchingDirection patchingDirection = PatchingDirection.ParallelWithTime,
         Func<TEntity, string>? serializer = null,
         Func<string, TEntity>? deserializer = null,
+        Action<string, TEntity>? populateEntity = null,
         IEnumerable<ISkipCondition<TEntity>>? skipConditions = null
     )
         : base(PrepareForTimePeriodChainConstructor(timeperiods))
     {
         _serialize = serializer ?? DefaultSerializer;
         _deserialize = deserializer ?? DefaultDeSerializer;
+        _populateEntity = populateEntity;
         PatchingDirection = patchingDirection;
         if (
             timeperiods?.FirstOrDefault(tpr => tpr.PatchingDirection != PatchingDirection) is
@@ -544,18 +548,15 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     }
 
     /// <summary>
-    /// start at <paramref name="initialEntity"/> at beginning of time.
-    /// Then apply all the patches up to <paramref name="keyDate"/> and return the state of the entity at <paramref name="keyDate"/>
+    /// Applies all patches up to <paramref name="keyDate"/> and returns the patched JToken.
+    /// This is the core patching logic shared by all PatchToDate overloads.
     /// </summary>
-    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
-    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
-    /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
-    [Pure]
-    public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
+    private JToken ApplyPatchesToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
         var jdp = new JsonDiffPatch();
         var left = ToJToken(initialEntity);
         _skippedPatches = new();
+
         switch (PatchingDirection)
         {
             case PatchingDirection.ParallelWithTime:
@@ -609,7 +610,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     }
                 }
 
-                return _deserialize(JsonConvert.SerializeObject(left));
+                return left;
             }
             case PatchingDirection.AntiParallelWithTime:
             {
@@ -655,11 +656,48 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
                     }
                 }
 
-                return _deserialize(JsonConvert.SerializeObject(left));
+                return left;
             }
             default:
                 throw new ArgumentOutOfRangeException();
         }
+    }
+
+    /// <summary>
+    /// start at <paramref name="initialEntity"/> at beginning of time.
+    /// Then apply all the patches up to <paramref name="keyDate"/> and return the state of the entity at <paramref name="keyDate"/>
+    /// </summary>
+    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
+    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
+    /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
+    [Pure]
+    public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
+    {
+        var left = ApplyPatchesToDate(initialEntity, keyDate);
+        return _deserialize(JsonConvert.SerializeObject(left));
+    }
+
+    /// <summary>
+    /// Applies patches up to <paramref name="keyDate"/> and populates the <paramref name="targetEntity"/> in-place,
+    /// preserving its object identity. This is useful for ORM scenarios where you need to update an entity
+    /// that is already tracked by the ORM without replacing it with a new instance.
+    /// </summary>
+    /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time (used as base for patching)</param>
+    /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
+    /// <param name="targetEntity">the entity instance to populate with the patched state; this instance is modified in-place</param>
+    /// <exception cref="InvalidOperationException">thrown when no populateEntity action was provided in the constructor</exception>
+    public void PatchToDate(TEntity initialEntity, DateTimeOffset keyDate, TEntity targetEntity)
+    {
+        if (_populateEntity is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot populate target entity because no {nameof(_populateEntity)} action was provided in the constructor. "
+                    + $"Please provide a populateEntity action (e.g., (json, entity) => JsonConvert.PopulateObject(json, entity)) when constructing the {nameof(TimeRangePatchChain<TEntity>)}."
+            );
+        }
+
+        var left = ApplyPatchesToDate(initialEntity, keyDate);
+        _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
     }
 
     /// <summary>
