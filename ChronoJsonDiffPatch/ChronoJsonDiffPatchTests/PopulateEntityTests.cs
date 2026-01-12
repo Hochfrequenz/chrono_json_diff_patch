@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using AwesomeAssertions;
 using ChronoJsonDiffPatch;
 using Newtonsoft.Json;
@@ -16,16 +15,16 @@ public class PopulateEntityTests
 {
     internal class DummyClass
     {
-        [JsonPropertyName("myProperty")]
+        [JsonProperty("myProperty")]
         public string MyProperty { get; set; }
     }
 
     internal class DummyClassWithTwoProperties
     {
-        [JsonPropertyName("myPropertyA")]
+        [JsonProperty("myPropertyA")]
         public string MyPropertyA { get; set; }
 
-        [JsonPropertyName("myPropertyB")]
+        [JsonProperty("myPropertyB")]
         public string MyPropertyB { get; set; }
     }
 
@@ -621,10 +620,10 @@ public class PopulateEntityTests
 
     internal class Bicycle
     {
-        [JsonPropertyName("colour")]
+        [JsonProperty("colour")]
         public string Colour { get; set; }
 
-        [JsonPropertyName("maxSpeedInKmh")]
+        [JsonProperty("maxSpeedInKmh")]
         public int MaxSpeedInKmh { get; set; }
     }
 
@@ -635,10 +634,10 @@ public class PopulateEntityTests
     /// </summary>
     internal class Owner
     {
-        [JsonPropertyName("name")]
+        [JsonProperty("name")]
         public string Name { get; set; }
 
-        [JsonPropertyName("age")]
+        [JsonProperty("age")]
         public int Age { get; set; }
     }
 
@@ -647,10 +646,10 @@ public class PopulateEntityTests
     /// </summary>
     internal class BicycleWithOwner
     {
-        [JsonPropertyName("colour")]
+        [JsonProperty("colour")]
         public string Colour { get; set; }
 
-        [JsonPropertyName("owner")]
+        [JsonProperty("owner")]
         public Owner Owner { get; set; }
     }
 
@@ -659,10 +658,10 @@ public class PopulateEntityTests
     /// </summary>
     internal class BicycleWithAccessories
     {
-        [JsonPropertyName("colour")]
+        [JsonProperty("colour")]
         public string Colour { get; set; }
 
-        [JsonPropertyName("accessories")]
+        [JsonProperty("accessories")]
         public List<string> Accessories { get; set; } = new();
     }
 
@@ -719,7 +718,7 @@ public class PopulateEntityTests
 
     /// <summary>
     /// GOOD NEWS: Newtonsoft.Json's PopulateObject also preserves collection references!
-    /// It clears and repopulates the existing collection rather than replacing it.
+    /// Note: It APPENDS to the existing collection rather than replacing it.
     /// </summary>
     [Fact]
     public void Test_PopulateEntity_Preserves_Collection_References_With_Newtonsoft()
@@ -824,7 +823,7 @@ public class PopulateEntityTests
     /// </summary>
     internal class BicycleWithIgnoredOwner
     {
-        [JsonPropertyName("colour")]
+        [JsonProperty("colour")]
         public string Colour { get; set; }
 
         /// <summary>
