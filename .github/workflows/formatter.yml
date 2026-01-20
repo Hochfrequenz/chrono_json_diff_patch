@@ -6,14 +6,14 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup .NET 9
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9
+          dotnet-version: 10
       - name: Restore .NET tools
         working-directory: ./ChronoJsonDiffPatch
         run: dotnet tool restore
       - name: Run CSharpier
         working-directory: ./ChronoJsonDiffPatch
-        run: dotnet csharpier . --check
+        run: dotnet csharpier check .

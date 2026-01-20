@@ -324,7 +324,8 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
             if (GetAll().Any(trp => trp.End == infinitelyNarrowPatch.Start && !trp.IsMoment)) // join the patch which is going to be deleted with another patch if it exists
             {
                 var artificialChainWithoutTheRecentlyAddedPatch = new TimeRangePatchChain<TEntity>(
-                    GetAll().Where(p => !p.Equals(patchToBeAdded))
+                    GetAll().Where(p => !p.Equals(patchToBeAdded)),
+                    skipConditions: _skipConditions
                 );
                 var stateWithoutMomentPatch =
                     artificialChainWithoutTheRecentlyAddedPatch.PatchToDate(
