@@ -108,6 +108,145 @@ Internally the chain only saves the differential changes/JsonDiffPatches at the 
 In the end, the chain saves the changes to an entity as JsonDiffPatches without storing the entity itself.
 This is useful if you handle large objects with `n` changes at certain moments and you don't want to to persist the majority of unchanged properties `n` times but only once.
 
+### ORM-Friendly In-Place Entity Updates
+
+When using this library with an ORM (like Entity Framework), you might encounter issues where the ORM loses track of your entities.
+This happens because `PatchToDate()` creates a **new instance** of your entity via JSON deserialization.
+The ORM tracks the original instance, so it sees the returned object as "new" rather than an update to the existing tracked entity.
+
+To solve this, you can provide a `populateEntity` action that updates an existing entity in-place instead of creating a new one.
+
+#### Using Newtonsoft.Json
+
+```c#
+using ChronoJsonDiffPatch;
+using Newtonsoft.Json;
+
+// Create a chain with populateEntity configured
+var chain = new TimeRangePatchChain<Bicycle>(
+    populateEntity: (json, entity) => JsonConvert.PopulateObject(json, entity)
+);
+
+// Add patches as usual
+var initialBicycle = new Bicycle { Colour = "lila", MaxSpeedInKmh = 120 };
+chain.Add(initialBicycle, new Bicycle { Colour = "brown", MaxSpeedInKmh = 120 }, colourChangeDate1);
+chain.Add(initialBicycle, new Bicycle { Colour = "blue", MaxSpeedInKmh = 120 }, colourChangeDate2);
+
+// This is your ORM-tracked entity
+var ormTrackedBicycle = dbContext.Bicycles.Find(id);
+
+// Use the three-argument overload to populate in-place
+// The entity identity is preserved - ReferenceEquals(ormTrackedBicycle, originalRef) == true
+chain.PatchToDate(initialBicycle, colourChangeDate2, ormTrackedBicycle);
+
+// Now ormTrackedBicycle has the patched values, but it's the SAME instance
+// Your ORM can properly track the changes
+dbContext.SaveChanges(); // Works correctly - updates instead of insert
+```
+
+#### Using System.Text.Json (.NET 8+)
+
+System.Text.Json doesn't have a direct `PopulateObject` equivalent, but you can achieve the same result using the `JsonObjectCreationHandling.Populate` feature with a `JsonTypeInfo` modifier. Here's a reusable generic helper method - define it once in your project and use it for any entity type:
+
+```c#
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+
+// Define this helper method ONCE in your project - works for any entity type
+public static class SystemTextJsonHelper
+{
+    public static void PopulateObject<T>(string json, T target) where T : class
+    {
+        var options = new JsonSerializerOptions
+        {
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers =
+                {
+                    typeInfo =>
+                    {
+                        if (typeInfo.Type == typeof(T))
+                        {
+                            typeInfo.CreateObject = () => target;
+                        }
+                    }
+                }
+            },
+            PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate
+        };
+        JsonSerializer.Deserialize<T>(json, options);
+    }
+}
+```
+
+Then use it just like `JsonConvert.PopulateObject`:
+
+```c#
+using ChronoJsonDiffPatch;
+
+// Create a chain - just as simple as the Newtonsoft.Json version
+var chain = new TimeRangePatchChain<Bicycle>(
+    populateEntity: SystemTextJsonHelper.PopulateObject
+);
+
+// Usage is the same
+var ormTrackedBicycle = dbContext.Bicycles.Find(id);
+chain.PatchToDate(initialBicycle, colourChangeDate2, ormTrackedBicycle);
+dbContext.SaveChanges(); // Works correctly
+```
+
+The helper method is generic and works for any entity type with any number of properties - no per-property code needed.
+
+The key differences from the legacy approach:
+- Provide a `populateEntity` action in the constructor
+- Use the three-argument `PatchToDate(initialEntity, keyDate, targetEntity)` overload
+- The target entity is modified in-place, preserving object identity
+
+#### Behavior with Nested Objects and Collections
+
+Both Newtonsoft.Json and System.Text.Json (with `JsonObjectCreationHandling.Populate`) preserve references for nested objects and collections - they populate them **in-place** rather than replacing them. This is safe for ORM tracking of related entities:
+
+```c#
+class Order
+{
+    public string Status { get; set; }
+    public Customer Customer { get; set; }      // Nested entity - reference preserved!
+    public List<OrderItem> Items { get; set; }  // Collection - reference preserved!
+}
+```
+
+**Important notes:**
+- **Nested objects**: The reference is preserved and properties are updated in-place. Your ORM will continue tracking the nested entity.
+- **Collections**: The reference is preserved, but items are **appended** (not replaced). If you need clean replacement semantics, consider using `[JsonIgnore]` on collection properties and handling them separately.
+- **Use `[JsonIgnore]`** on navigation properties if you want to exclude them from patching entirely (e.g., when the ORM manages those relationships independently).
+
+### Migrating from Legacy to ORM-Friendly Approach
+
+If you're migrating existing code that stores entities at +infinity with patches, here's how to update:
+
+**Before (legacy - creates new instances):**
+```c#
+var chain = new TimeRangePatchChain<MyEntity>(patches, PatchingDirection.AntiParallelWithTime);
+var result = chain.PatchToDate(entityAtPlusInfinity, keyDate);
+// result is a NEW instance - ORM loses tracking
+```
+
+**After (ORM-friendly - preserves identity):**
+```c#
+var chain = new TimeRangePatchChain<MyEntity>(
+    patches,
+    PatchingDirection.AntiParallelWithTime,
+    populateEntity: (json, entity) => JsonConvert.PopulateObject(json, entity)
+);
+
+// Use your existing ORM-tracked entity as the target
+chain.PatchToDate(entityAtPlusInfinity, keyDate, ormTrackedEntity);
+// ormTrackedEntity is the SAME instance, just with updated properties
+```
+
+Note: The original `PatchToDate(initialEntity, keyDate)` method still works exactly as before for cases where you don't need identity preservation.
+
 ### Patching Anti Parallel with Time
 
 You can also model the entity such that the "base" of the patches is not the state at `DateTime.MinValue` but at `DateTime.MaxValue` and the patches model the differential changes from a future date towards the past.
