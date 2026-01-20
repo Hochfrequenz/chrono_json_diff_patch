@@ -1,20 +1,11 @@
-
 ChronoJsonDiffPatch/ChronoJsonDiffPatch/obj/
-
 ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/obj/
-
-ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/bin/Debug/net7.0/
-
-ChronoJsonDiffPatch/ChronoJsonDiffPatch/bin/Debug/net7.0/
-
+ChronoJsonDiffPatch/ChronoJsonDiffPatch/bin/
+ChronoJsonDiffPatch/ChronoJsonDiffPatchTests/bin/
 ChronoJsonDiffPatch/ChronoJsonDiffPatch.sln.DotSettings.user
-
-ChronoJsonDiffPatch/ChronoJsonDiffPatch/bin/Debug/ChronoJsonDiffPatch.xml
+ChronoJsonDiffPatch/.claude/
 
 *.dll
-
 *.pdb
-
 *.exe
-
 *.xml
