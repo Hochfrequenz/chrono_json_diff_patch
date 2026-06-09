@@ -23,7 +23,7 @@ public class SkipPatchesWithUnmatchedListItems<TEntity, TListItem> : ISkipCondit
     /// </summary>
     public virtual bool ShouldSkipPatch(
         TEntity initialEntity,
-        TimeRangePatch failedPatch,
+        TimeRangePatch? failedPatch,
         Exception errorWhilePatching
     )
     {
