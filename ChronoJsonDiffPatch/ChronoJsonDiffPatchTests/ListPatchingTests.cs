@@ -193,6 +193,151 @@ public class ListPatchingTests
         antiparallelChain.PatchesHaveBeenSkipped.Should().BeTrue();
     }
 
+    /// <summary>
+    /// Reproduces a scenario where the final deserialization after patching fails (e.g. because the
+    /// accumulated JToken has a structurally invalid list), and verifies that WITHOUT skip conditions
+    /// the exception propagates to the caller.
+    /// </summary>
+    /// <remarks>
+    /// This simulates a production issue (DEV-107694 in TechnicalMasterData) where:
+    /// - The initial entity had a null list (because of a missing EF Core Include)
+    /// - Patches that added/modified list items were applied to the null JToken
+    /// - The accumulated JToken had a structurally invalid list representation
+    /// - The final System.Text.Json deserialization threw a JsonException
+    ///
+    /// The custom deserializer here simulates this by always throwing when deserializing.
+    /// </remarks>
+    [Fact]
+    public void PatchToDate_Without_SkipConditions_Throws_When_Final_Deserialization_Fails()
+    {
+        // Build a valid chain first with the default deserializer
+        var buildChain = new TimeRangePatchChain<EntityWithList>();
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem> { new() { Value = "A" } },
+        };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var updatedEntity = new EntityWithList
+        {
+            MyList = new List<ListItem>
+            {
+                new() { Value = "A" },
+                new() { Value = "B" },
+            },
+        };
+        buildChain.Add(initialEntity, updatedEntity, keyDate);
+
+        // Extract raw patches and create a chain with a broken deserializer
+        var patches = buildChain.GetAll().ToList();
+        var chainWithBrokenDeserializer = new TimeRangePatchChain<EntityWithList>(
+            patches,
+            deserializer: _ =>
+                throw new System.Text.Json.JsonException(
+                    "The JSON value could not be converted to List`1"
+                )
+        );
+
+        var act = () =>
+            chainWithBrokenDeserializer.PatchToDate(initialEntity, keyDate + TimeSpan.FromDays(1));
+
+        act.Should().ThrowExactly<System.Text.Json.JsonException>();
+        chainWithBrokenDeserializer.FinalDeserializationFailed.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Verifies that when the final deserialization fails AND skip conditions are configured,
+    /// the error is caught and the initial entity is returned.
+    /// Also verifies that <see cref="TimeRangePatchChain{TEntity}.FinalDeserializationFailed"/> is set.
+    /// </summary>
+    [Fact]
+    public void PatchToDate_With_SkipConditions_Returns_InitialEntity_When_Final_Deserialization_Fails()
+    {
+        // Build a valid chain first with the default deserializer
+        var buildChain = new TimeRangePatchChain<EntityWithList>();
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem> { new() { Value = "A" } },
+        };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var updatedEntity = new EntityWithList
+        {
+            MyList = new List<ListItem>
+            {
+                new() { Value = "A" },
+                new() { Value = "B" },
+            },
+        };
+        buildChain.Add(initialEntity, updatedEntity, keyDate);
+
+        // Extract raw patches and create a chain with a broken deserializer + skip condition
+        var patches = buildChain.GetAll().ToList();
+        var chainWithBrokenDeserializer = new TimeRangePatchChain<EntityWithList>(
+            patches,
+            deserializer: _ =>
+                throw new System.Text.Json.JsonException(
+                    "The JSON value could not be converted to List`1"
+                ),
+            skipConditions: new List<ISkipCondition<EntityWithList>>
+            {
+                new IgnoreAllSkipCondition(),
+            }
+        );
+
+        var result = chainWithBrokenDeserializer.PatchToDate(
+            initialEntity,
+            keyDate + TimeSpan.FromDays(1)
+        );
+
+        result.Should().BeSameAs(initialEntity);
+        chainWithBrokenDeserializer.PatchesHaveBeenSkipped.Should().BeTrue();
+        chainWithBrokenDeserializer.FinalDeserializationFailed.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="TimeRangePatchChain{TEntity}.FinalDeserializationFailed"/> is reset
+    /// between calls to PatchToDate.
+    /// </summary>
+    [Fact]
+    public void FinalDeserializationFailed_Is_Reset_Between_Calls()
+    {
+        var chain = new TimeRangePatchChain<EntityWithList>();
+        var initialEntity = new EntityWithList
+        {
+            MyList = new List<ListItem> { new() { Value = "A" } },
+        };
+        var keyDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        chain.Add(
+            initialEntity,
+            new EntityWithList
+            {
+                MyList = new List<ListItem>
+                {
+                    new() { Value = "A" },
+                    new() { Value = "B" },
+                },
+            },
+            keyDate
+        );
+
+        // Normal patching should NOT set FinalDeserializationFailed
+        var result = chain.PatchToDate(initialEntity, keyDate + TimeSpan.FromDays(1));
+        chain.FinalDeserializationFailed.Should().BeFalse();
+        result.MyList.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// A skip condition that always returns true for any error.
+    /// This simulates IgnoreEverythingSkipCondition from downstream consumers.
+    /// </summary>
+    private class IgnoreAllSkipCondition : ISkipCondition<EntityWithList>
+    {
+        public bool ShouldSkipPatch(
+            EntityWithList initialEntity,
+            TimeRangePatch? failedPatch,
+            Exception errorWhilePatching
+        ) => true;
+    }
+
     private static void ReverseAndRevert(
         TimeRangePatchChain<EntityWithList> chain,
         EntityWithList initialEntity

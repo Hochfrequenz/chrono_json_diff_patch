@@ -19,11 +19,11 @@ public interface ISkipCondition<in TEntity>
     /// </summary>
     /// <param name="initialEntity">state before applying the patch <paramref name="failedPatch"/> (but not necessarily before apply any patch in the chain)</param>
     /// <param name="errorWhilePatching">any error that occurred</param>
-    /// <param name="failedPatch">the patch that lead to the exception <paramref name="errorWhilePatching"/></param>
+    /// <param name="failedPatch">the patch that lead to the exception <paramref name="errorWhilePatching"/>; null if the error occurred during final deserialization after all patches were applied</param>
     /// <returns>true if the patch should be skipped</returns>
     public bool ShouldSkipPatch(
         TEntity initialEntity,
-        TimeRangePatch failedPatch,
+        TimeRangePatch? failedPatch,
         Exception errorWhilePatching
     );
 }
