@@ -52,8 +52,21 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// </summary>
     public bool PatchesHaveBeenSkipped
     {
-        get => SkippedPatches?.Any() == true;
+        get => SkippedPatches?.Any() == true || FinalDeserializationFailed;
     }
+
+    /// <summary>
+    /// Set to true if the final deserialization of the accumulated JToken back to <typeparamref name="TEntity"/>
+    /// failed after all patches were applied. This means the accumulated patch result was structurally invalid
+    /// for the target type, and the returned entity is the unpatched initial entity.
+    /// </summary>
+    /// <remarks>
+    /// When this is true, <see cref="PatchToDate(TEntity, DateTimeOffset)"/> returns <c>initialEntity</c> as-is.
+    /// In <see cref="PatchingDirection.AntiParallelWithTime"/> mode, <c>initialEntity</c> is the state at +infinity
+    /// (the "current" state), NOT the historical state at the requested key date.
+    /// In <see cref="PatchingDirection.ParallelWithTime"/> mode, <c>initialEntity</c> is the state at -infinity.
+    /// </remarks>
+    public bool FinalDeserializationFailed { get; private set; }
 
     /// <summary>
     /// converts the given <paramref name="entity"/> to an JToken using the serializer configured in the constructor (or default)
@@ -556,6 +569,7 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         var jdp = new JsonDiffPatch();
         var left = ToJToken(initialEntity);
         _skippedPatches = new();
+        FinalDeserializationFailed = false;
 
         switch (PatchingDirection)
         {
@@ -670,11 +684,30 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
     /// <param name="initialEntity">the state of <typeparamref name="TEntity"/> at the beginning of time</param>
     /// <param name="keyDate">the date up to which you'd like to apply the patches</param>
     /// <returns>the state of the entity after all the patches up to <paramref name="keyDate"/> have been applied</returns>
-    [Pure]
     public TEntity PatchToDate(TEntity initialEntity, DateTimeOffset keyDate)
     {
         var left = ApplyPatchesToDate(initialEntity, keyDate);
-        return _deserialize(JsonConvert.SerializeObject(left));
+        try
+        {
+            return _deserialize(JsonConvert.SerializeObject(left));
+        }
+        catch (Exception exc)
+        {
+            if (
+                _skipConditions?.Any(sc =>
+                    sc.ShouldSkipPatch(initialEntity, failedPatch: null, exc)
+                ) == true
+            )
+            {
+                // The final deserialization failed, but skip conditions say we should tolerate it.
+                // Return the initial entity as-is because the accumulated patches produced an invalid state.
+                // Callers should check FinalDeserializationFailed to detect this.
+                FinalDeserializationFailed = true;
+                return initialEntity;
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -697,7 +730,27 @@ public class TimeRangePatchChain<TEntity> : TimePeriodChain
         }
 
         var left = ApplyPatchesToDate(initialEntity, keyDate);
-        _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
+        try
+        {
+            _populateEntity(JsonConvert.SerializeObject(left), targetEntity);
+        }
+        catch (Exception exc)
+        {
+            if (
+                _skipConditions?.Any(sc =>
+                    sc.ShouldSkipPatch(initialEntity, failedPatch: null, exc)
+                ) == true
+            )
+            {
+                // The final population failed, but skip conditions say we should tolerate it.
+                // Leave targetEntity unchanged because the accumulated patches produced an invalid state.
+                // Callers should check FinalDeserializationFailed to detect this.
+                FinalDeserializationFailed = true;
+                return;
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
