@@ -18,7 +18,7 @@ public class PatchingException<TEntity> : Exception
     /// <summary>
     /// state of the entity at the point where Applying <see cref="FailedPatch"/> failed
     /// </summary>
-    public JToken StateOfEntityBeforePatch { get; }
+    public TEntity StateOfEntityBeforePatch { get; }
 
     /// <summary>
     /// patch that could not be applied
@@ -41,7 +41,7 @@ public class PatchingException<TEntity> : Exception
     /// <param name="innerException"></param>
     public PatchingException(
         TEntity stateOfEntityBeforeAnyPatch,
-        JToken left,
+        TEntity left,
         JToken? patch,
         int index,
         string message,
