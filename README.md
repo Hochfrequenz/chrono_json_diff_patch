@@ -144,7 +144,7 @@ chain.PatchToDate(initialBicycle, colourChangeDate2, ormTrackedBicycle);
 dbContext.SaveChanges(); // Works correctly - updates instead of insert
 ```
 
-#### Using System.Text.Json (.NET 8+)
+#### Using System.Text.Json (.NET 10+)
 
 System.Text.Json doesn't have a direct `PopulateObject` equivalent, but you can achieve the same result using the `JsonObjectCreationHandling.Populate` feature with a `JsonTypeInfo` modifier. Here's a reusable generic helper method - define it once in your project and use it for any entity type:
 
