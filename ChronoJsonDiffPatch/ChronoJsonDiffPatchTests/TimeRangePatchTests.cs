@@ -26,19 +26,12 @@ public class TimeRangePatchTests
             _ => throw new ArgumentOutOfRangeException(nameof(serializer), serializer, null),
         };
         jsonString.Should().NotBe(null);
-        var deserialized =
-            deSerializer switch
-            {
-                Serializer.SystemText => JsonSerializer.Deserialize<T>(jsonString),
-                Serializer.Newtonsoft => Newtonsoft.Json.JsonConvert.DeserializeObject<T>(
-                    jsonString
-                ),
-                _ => throw new ArgumentOutOfRangeException(
-                    nameof(deSerializer),
-                    deSerializer,
-                    null
-                ),
-            } ?? throw new InvalidOperationException();
+        var deserialized = deSerializer switch
+        {
+            Serializer.SystemText => JsonSerializer.Deserialize<T>(jsonString),
+            Serializer.Newtonsoft => Newtonsoft.Json.JsonConvert.DeserializeObject<T>(jsonString),
+            _ => throw new ArgumentOutOfRangeException(nameof(deSerializer), deSerializer, null),
+        } ?? throw new InvalidOperationException();
         deserialized.Should().BeEquivalentTo(candidate);
         return deserialized;
     }
